@@ -20,6 +20,26 @@ export function isUnshared(data: Uint8Array): data is Uint8Array<ArrayBuffer> {
   return typeof SharedArrayBuffer === 'undefined' || !(data.buffer instanceof SharedArrayBuffer);
 }
 
+/**
+ * Close a WebSocket and resolve once it has actually closed, which is the only
+ * flush signal the API offers: the closing handshake happens after the queued
+ * frames go out, so `onclose` means the buffer drained. A caller that publishes
+ * and exits immediately -- the CLI -- otherwise drops its last send.
+ */
+export function closeAndFlush(socket: WebSocket): Promise<void> {
+  if (socket.readyState === WebSocket.CLOSED) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    socket.addEventListener('close', () => resolve());
+    socket.addEventListener('error', () => resolve());
+    try {
+      socket.close();
+    } catch {
+      resolve();
+    }
+  });
+}
+
 export function orderSignals(fn: (signal: string) => MaybePromise<void>) {
   const dispatchers: (() => MaybePromise<void>)[] = [];
   let isLocked = false;

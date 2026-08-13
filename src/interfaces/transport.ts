@@ -8,6 +8,8 @@
 // Matching rule: peer X and peer Y can negotiate iff X's emitsProtocol
 // appears in Y's acceptsProtocols, or vice versa.
 
+import { MaybePromise } from '../util/MaybePromise.ts';
+
 // -- Byte channel (shared between anonymous and authenticated) ---------
 
 /** Byte-level outbound channel the plugin provides after opening a connection. */
@@ -20,7 +22,13 @@ export interface ConnectionProvider {
   /** Send fast; drops are fine. */
   sendFast(data: Uint8Array): void;
 
-  shutdown(): void;
+  /**
+   * Close the channel, resolving once anything already handed to `sendReliable`
+   * has left the process. Callers that publish and then exit -- the CLI does --
+   * have no other way to know a flood actually went out, since gossip carries no
+   * acknowledgement.
+   */
+  shutdown(): MaybePromise<void>;
 }
 
 /** Byte-level inbound callbacks Scaffold returns to the plugin. */

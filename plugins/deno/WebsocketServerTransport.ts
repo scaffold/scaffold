@@ -18,7 +18,7 @@ import {
   TransportSession,
 } from '../../src/interfaces/transport.ts';
 import { assert } from '../../src/util/functional.ts';
-import { isUnshared } from '../util.ts';
+import { closeAndFlush, isUnshared } from '../util.ts';
 
 interface PendingAuthConn {
   driver: AuthenticatedTransportDriver;
@@ -141,11 +141,7 @@ function wrapSocket(socket: WebSocket): ConnectionProvider {
       assert(isUnshared(data)); // WebSocket.send doesn't support SharedArrayBuffer
       socket.send(data);
     },
-    shutdown: () => {
-      try {
-        socket.close();
-      } catch { /* ignore */ }
-    },
+    shutdown: () => closeAndFlush(socket),
   };
 }
 

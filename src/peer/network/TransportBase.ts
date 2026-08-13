@@ -7,7 +7,7 @@ import {
   TransportService,
 } from '../../interfaces/transport.ts';
 import { ScopedLogger } from '../../logic/Logger.ts';
-import { assert, error } from '../../util/functional.ts';
+import { MaybePromise } from '../../util/MaybePromise.ts';
 import { MessageJoiner, MessageSplitter } from './MessageSplitter.ts';
 import { Connection } from './types.ts';
 
@@ -77,8 +77,15 @@ export abstract class TransportBase {
   }
 
   async stop() {
-    for (const conn of [...this.connections]) {
-      this.closeConnection(conn, 'stop');
+    // Await the shutdowns: they are what flush anything still queued on a socket,
+    // so a peer that publishes and exits immediately has its last block leave.
+    const flushed = await Promise.allSettled(
+      [...this.connections].map((conn) => this.closeConnection(conn, 'stop')),
+    );
+    for (const result of flushed) {
+      if (result.status === 'rejected') {
+        this.getLogger()?.warn('shutdownFailed', { error: String(result.reason) });
+      }
     }
 
     const results = await Promise.allSettled(this.transports.map(({ service }) => service.stop()));
@@ -224,15 +231,18 @@ export abstract class TransportBase {
     conn.sentCount++;
   }
 
-  private closeConnection(conn: Connection, reason: CloseReason): void {
+  // Returns the provider's flush so `stop` can await it; fire-and-forget callers
+  // (`close`, a remote hangup) ignore it and keep their synchronous shape.
+  private closeConnection(conn: Connection, reason: CloseReason): MaybePromise<void> {
     // Idempotent: a remote close arriving after a local one is the normal race.
     if (!conn.isOpen) return;
     conn.isOpen = false;
     this.connections.delete(conn);
 
+    let shutdown: MaybePromise<void> = undefined;
     if (reason !== 'remote') {
       try {
-        conn.provider.shutdown();
+        shutdown = conn.provider.shutdown();
       } catch (err) {
         this.getLogger()?.warn('shutdownFailed', { conn: conn.debugName, error: String(err) });
       }
@@ -240,5 +250,7 @@ export abstract class TransportBase {
 
     this.getLogger()?.info('connectionClosed', { conn: conn.debugName, reason });
     this.onConnectionClosed(conn);
+
+    return shutdown;
   }
 }

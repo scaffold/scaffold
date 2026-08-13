@@ -1,15 +1,16 @@
 import { parseArgs } from '@std/cli/parse-args';
 import { Scaffold, ScaffoldConfig } from '../Scaffold.ts';
 import { Hash } from '../util/Hash.ts';
-import { bin2str, EMPTY_ARR, str2bin } from '../util/buffer.ts';
+import { bin2str, str2bin } from '../util/buffer.ts';
 import { createSource } from '../contract/createSource.ts';
 import { Source, SourceRoot, ValueType } from '../contract/values.ts';
-import { assert, todo } from '../util/functional.ts';
+import { todo } from '../util/functional.ts';
 import { makeDefaultConfig } from '../Config.ts';
 import { GeneratorRole } from '../roles/GeneratorRole.ts';
 import { WebsocketClientTransport } from '../../plugins/WebsocketClientTransport.ts';
 import { TextLoggingProvider } from '../../plugins/TextLoggingProvider.ts';
 import { Gossip } from '../peer/network/Gossip.ts';
+import { Transport } from '../peer/network/Transport.ts';
 
 export enum FsNodeType {
   Missing = 0,
@@ -75,10 +76,18 @@ const EXIT_CODES = {
   UNAVAILABLE: 69,
 };
 
+const DEFAULT_TIMEOUT_MS = 10_000;
+
 function parseArgv(argv: string[]) {
   const parsed = parseArgs(argv.slice(1), {
     boolean: ['help', 'version'],
-    string: ['private_key_file', 'genesis_block_file', 'bootstrap_urls', 'verbosity'],
+    string: [
+      'private_key_file',
+      'genesis_block_file',
+      'bootstrap_urls',
+      'verbosity',
+      'timeout',
+    ],
     alias: { h: 'help', v: 'version' },
   });
   return { ...parsed, _: undefined, positional: parsed._.map(String) };
@@ -117,27 +126,33 @@ export class ScaffoldCLI {
     }
 
     const action = parsed.positional.shift();
-    switch (action) {
-      case undefined:
-        this.usage(program);
+    try {
+      switch (action) {
+        case undefined:
+          this.usage(program);
+          return EXIT_CODES.USAGE;
+
+        case 'help':
+          this.usage(program);
+          return EXIT_CODES.OK;
+
+        case 'put':
+          return await this.put(parsed);
+
+        case 'fetch':
+          return await this.fetch(parsed);
+
+        default:
+          this.deps.stderr(`${program}: unknown command '${action}'\n`);
+          this.usage(program);
+          return EXIT_CODES.USAGE;
+      }
+    } catch (err) {
+      if (err instanceof UsageError) {
+        this.deps.stderr(`${program}: ${err.message}\n`);
         return EXIT_CODES.USAGE;
-
-      case 'help':
-        this.usage(program);
-        return EXIT_CODES.OK;
-
-      case 'put':
-        await this.put(parsed);
-        return EXIT_CODES.OK;
-
-      case 'fetch':
-        await this.fetch(parsed);
-        return EXIT_CODES.OK;
-
-      default:
-        this.deps.stderr(`${program}: unknown command '${action}'\n`);
-        this.usage(program);
-        return EXIT_CODES.USAGE;
+      }
+      throw err;
     }
   }
 
@@ -174,6 +189,8 @@ export class ScaffoldCLI {
       `      --genesis_block_file <path> Genesis block (not yet implemented)`,
       `      --verbosity <spec>          Log to stderr, e.g. 'warn' or`,
       `                                  'warn,gossip=debug'. Also \$SCAFFOLD_LOG`,
+      `      --timeout <ms>              Give up waiting for a peer or a result`,
+      `                                  after this long (default ${DEFAULT_TIMEOUT_MS})`,
       ``,
     ].join('\n');
     this.deps.stdout(str2bin(message));
@@ -215,6 +232,50 @@ export class ScaffoldCLI {
     }
 
     return scaffold;
+  }
+
+  private parseTimeout(args: ParsedArgs): number {
+    if (args.timeout === undefined) return DEFAULT_TIMEOUT_MS;
+    const ms = Number(args.timeout);
+    if (!Number.isFinite(ms) || ms <= 0) {
+      throw new UsageError(
+        `--timeout takes a positive number of milliseconds, got '${args.timeout}'`,
+      );
+    }
+    return ms;
+  }
+
+  // `connect` is fire-and-forget and the handshake takes a few milliseconds, so a
+  // command that starts work immediately raced it and always lost: `put` built its
+  // block and exited before the socket opened (nothing was ever gossiped), and
+  // `fetch` returned before any peer could answer. Blocks built before the
+  // connection opens are still covered -- `Gossip.backfill` sends them on connect.
+  private waitForPeer(scaffold: Scaffold, timeoutMs: number): Promise<boolean> {
+    const ctx = scaffold.getContext();
+    const time = ctx.config.timeProvider;
+    const transport = ctx.get(Transport);
+    if (transport.getOpenConnections().size > 0) return Promise.resolve(true);
+
+    return new Promise((resolve) => {
+      const subscription = new AbortController();
+      const timer = time.setTimeout(() => {
+        subscription.abort();
+        resolve(false);
+      }, timeoutMs);
+
+      transport.onConnection(() => {
+        time.clearTimeout(timer);
+        subscription.abort();
+        resolve(true);
+      }, subscription.signal);
+    });
+  }
+
+  private async connectOrReport(parsed: ParsedArgs, scaffold: Scaffold, timeoutMs: number) {
+    if (parsed.bootstrap_urls === undefined) return true;
+    if (await this.waitForPeer(scaffold, timeoutMs)) return true;
+    this.deps.stderr(`scaffold: no peer connected within ${timeoutMs}ms\n`);
+    return false;
   }
 
   private async createSourceFromFs(
@@ -267,51 +328,99 @@ export class ScaffoldCLI {
     }
   }
 
-  private async put(parsed: ParsedArgs) {
+  private async put(parsed: ParsedArgs): Promise<number> {
     if (parsed.positional.length !== 3) {
       throw new UsageError(
         '`scaffold put [contract_hash] [params_path] [body_path]` takes 3 positional arguments',
       );
     }
     const [contractHash, params, body] = parsed.positional;
+    const timeoutMs = this.parseTimeout(parsed);
 
     const scaffold = await this.constructScaffold(parsed);
+    try {
+      if (!await this.connectOrReport(parsed, scaffold, timeoutMs)) {
+        return EXIT_CODES.UNAVAILABLE;
+      }
 
-    await scaffold.put({
-      contract: Hash.fromHex(contractHash),
-      params: this.createSourceFromArg(params),
-      result: this.createSourceFromArg(body),
-      onBlock: (block) => {
-        const output = block !== undefined
-          ? {
-            type: 'put_canonical',
-            hash: block.hash.toHex(),
-          }
-          : { type: 'put_pending' };
-        this.deps.stdout(str2bin(JSON.stringify(output, null, 2) + '\n'));
-      },
-    });
+      await scaffold.put({
+        contract: Hash.fromHex(contractHash),
+        params: this.createSourceFromArg(params),
+        result: this.createSourceFromArg(body),
+        onBlock: (block) => {
+          const output = block !== undefined
+            ? {
+              type: 'put_canonical',
+              hash: block.hash.toHex(),
+            }
+            : { type: 'put_pending' };
+          this.deps.stdout(str2bin(JSON.stringify(output, null, 2) + '\n'));
+        },
+      });
+
+      return EXIT_CODES.OK;
+    } finally {
+      // Closing shuts the sockets down gracefully, which flushes the block we
+      // just flooded before the host process exits.
+      await scaffold.close();
+    }
   }
 
-  private async fetch(parsed: ParsedArgs) {
+  private async fetch(parsed: ParsedArgs): Promise<number> {
     if (parsed.positional.length !== 2) {
       throw new UsageError(
         '`scaffold fetch [contract_hash] [params_path]` takes 2 positional arguments',
       );
     }
     const [contractHash, params] = parsed.positional;
+    const timeoutMs = this.parseTimeout(parsed);
 
     const scaffold = await this.constructScaffold(parsed);
+    try {
+      if (!await this.connectOrReport(parsed, scaffold, timeoutMs)) {
+        return EXIT_CODES.UNAVAILABLE;
+      }
 
-    await scaffold.fetch({
-      contract: Hash.fromHex(contractHash),
-      params: this.createSourceFromArg(params),
-      onResult: (result) => {
-        this.deps.stdout(result?.body ?? new Uint8Array());
+      const contract = Hash.fromHex(contractHash);
+      const source = this.createSourceFromArg(params);
+      const time = scaffold.getContext().config.timeProvider;
 
-        // Print a newline
-        this.deps.stdout(new Uint8Array([10]));
-      },
-    });
+      // `fetch` is a subscription, but a command has to finish: take the first
+      // answer and abort. The abort is also what cancels the query draft, which
+      // otherwise keeps retrying on every ingest if it stalled on placement.
+      const query = new AbortController();
+      const result = await new Promise<Uint8Array | undefined>((resolve, reject) => {
+        const timer = time.setTimeout(() => {
+          query.abort();
+          resolve(undefined);
+        }, timeoutMs);
+
+        scaffold.fetch({
+          contract,
+          params: source,
+          signal: query.signal,
+          onResult: (result) => {
+            if (result === null) return;
+            time.clearTimeout(timer);
+            query.abort();
+            resolve(result.body);
+          },
+        }).catch(reject);
+      });
+
+      if (result === undefined) {
+        this.deps.stderr(`scaffold: no result within ${timeoutMs}ms\n`);
+        return EXIT_CODES.UNAVAILABLE;
+      }
+
+      this.deps.stdout(result);
+
+      // Print a newline
+      this.deps.stdout(new Uint8Array([10]));
+
+      return EXIT_CODES.OK;
+    } finally {
+      await scaffold.close();
+    }
   }
 }

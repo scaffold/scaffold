@@ -4,14 +4,16 @@
 
 Just launch the website
 
+- [ ] Write blog post
 - [ ] Run the signaling server
-- [ ] More efficient gossip
-- [ ] Make the CLI work
+- [ ] Point relay.scaffold.io at 5.78.93.43
+- [ ] Point bootstrap url at signaling server
+- [ ] Publish new npm package
+- [x] Make the CLI work
 - [x] Remove subscription box
 - [x] Implement status bar (# of peers, blocks, etc)
 - [x] Rewrite "There's only three methods" to reflect the new interfaces.
 - [x] Hide "A contract development environment" section and top menu "Explorer" link
-- [ ] More landing page content about applications and what it can be used for (see https://iii.dev/ for inspiration)
 - [x] Update github link to https://github.com/scaffold/scaffold
 - [x] Update install command
 - [x] Get rid of `0xdda8ecfd22ea`
@@ -21,12 +23,13 @@ Just launch the website
 - [x] Update concepts page
 - [x] Update FAQ page
 - [x] Update "writing contracts" page
-- [ ] Update "how it works"
-- [ ] Update community page (just github and github discussions)
-- [ ] Write blog post
+- [x] Update "how it works"
+- [x] Update community page (just github and github discussions)
+- [ ] More landing page content about applications and what it can be used for (see https://iii.dev/ for inspiration)
+- [ ] More efficient gossip
 - [ ] Implement subscription box and re-add it?
 
-Andrew/Austin/Bob MVP
+MVP
 
 - WASM module linking, enabling the wasi shim
 - Scaffold.put a contract on the website (typescript; with CLI command in a comment)
@@ -114,6 +117,8 @@ Later
 - [ ] The unannounce machinery in `TransportBase.createAnonymousTransportDriver` is unreachable: it passes `(url, unannounce: AbortSignal)` to `onAnnounce`, but `startTransport` (and `Scaffold.startTransport`) type the callback as `(url: URL) => void`, so no caller can observe an address being withdrawn. `stopTransport` also never aborts the stopped plugin's announced URLs. Widen the public signature and abort on stop, or drop the AbortController bookkeeping
 - [ ] No dial retry or reconnect. `TransportService.dialAddress` is fire-and-forget and the interface carries no failure signal at all, so a dead bootstrap URL is invisible after the initial `bootstrapDial` log. Adding retry needs either a callback on the plugin interface or a timer that redials when no connection appeared, which can double-connect
 - [ ] No connection limits, eviction, peer scoring, or backpressure. v1 deferred the same (`TransportManager.ts:45-49`)
+- [ ] `WebrtcTransport`'s `shutdown` is `() => conn.close()`, which does not honor the flush contract `ConnectionProvider.shutdown` now carries (resolve once queued sends have left). `RTCPeerConnection.close()` discards whatever the reliable channel still has buffered, so a browser peer that publishes and immediately closes drops its last block -- exactly the bug the WebSocket plugins just fixed. A drain wants `reliableChannel.bufferedAmount === 0` (via `bufferedAmountLowThreshold = 0` plus the `bufferedamountlow` event) and must be bounded, or `Transport.stop` hangs when the event never fires on an already-dead channel. Left as-is because it cannot be exercised outside a browser
+- [ ] Gossip carries no acknowledgement, so "publish and exit" is only as good as the transport's flush: a caller learns its block left the process, never that a peer accepted it. `closeAndFlush` resolves on the WebSocket close event, which is the closing handshake and not a delivery receipt. The Request atom (above) is what would let the CLI confirm a put actually landed
 - [ ] `TransportBase.recvData` warn-logs a throw from the ingestion handler and keeps the connection open, because the claim-index poisoning gaps above let an honest peer trip a throw with a well-formed block. Once ingestion is robust this should close the connection, as legacy2 did
 - [ ] `src/util/MessageSplitter.ts` is still imported by `legacy2/Connection.ts` and keeps the bugs the v2 copy fixed: a `Uint32Array` header read that throws on short frames and on unaligned views, host-endian wire fields, `chunkSize = Infinity` yielding zero chunks (silent message drop), uncapped reassembly state, and an uncleared `setInterval`. Delete it with `src/node/`
 - [ ] `TransportBase` calls `onConnectionReady` before handing the `ConnectionDriver` back to the plugin, so a plugin must have its provider ready to send before calling `createAnonymousConnection` -- `Gossip.backfill` sends immediately. Undocumented in `docs/protocol/transport.md`, along with `dialAddress` now receiving the full URL href rather than a host
