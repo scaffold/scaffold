@@ -1,6 +1,7 @@
 import { decodeBase64, encodeBase64 } from '@std/encoding';
 import { error } from './functional.ts';
 import { Hash } from './Hash.ts';
+import { bin2hex } from './hex.ts';
 
 // -- Tagged JSON ----------------------------------------------------
 //
@@ -66,6 +67,8 @@ export const jsonSafeStringify = (obj: unknown, space?: number) => {
           return { hash: val.hash.toHex() };
         } else if (val instanceof Hash) {
           return val.toHex();
+        } else if (val instanceof Uint8Array) {
+          return bin2hex(val);
         } else {
           while (ancestors.length > 0 && ancestors.at(-1) !== this) {
             ancestors.pop();

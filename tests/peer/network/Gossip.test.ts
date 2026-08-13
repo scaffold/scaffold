@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertThrows } from '@std/assert';
 import { Block } from '../../../src/graph/types.ts';
-import { ScopedLogger } from '../../../src/logic/EventLog.ts';
+import { ScopedLogger } from '../../../src/logic/Logger.ts';
 import { GossipBase } from '../../../src/peer/network/GossipBase.ts';
 import { MessageJoiner, MessageSplitter } from '../../../src/peer/network/MessageSplitter.ts';
 import { Connection } from '../../../src/peer/network/types.ts';

@@ -1,5 +1,5 @@
 import { Block } from '../../graph/types.ts';
-import { ScopedLogger } from '../../logic/EventLog.ts';
+import { ScopedLogger } from '../../logic/Logger.ts';
 import { assert } from '../../util/functional.ts';
 import { mapPut, multimapPut } from '../../util/map.ts';
 import { Connection } from './types.ts';

@@ -13,6 +13,7 @@ import {
   TransportService,
   TransportSession,
 } from '../../src/interfaces/transport.ts';
+import { Logger } from '../../src/interfaces/LoggingProvider.ts';
 import { assert } from '../../src/util/functional.ts';
 import { Hash } from '../../src/util/Hash.ts';
 import { isUnshared } from '../util.ts';
@@ -26,14 +27,15 @@ export class WebrtcTransport implements TransportPlugin {
 
   private iceServersPromise: Promise<{ urls: string; order: number }[]>;
 
-  constructor() {
+  // The plugin has no Context, so a host that wants diagnostics passes one in.
+  constructor(private log?: Logger) {
     this.iceServersPromise = Promise.all(
       [
         'https://raw.githubusercontent.com/pradt2/always-online-stun/master/valid_hosts.txt',
         'https://raw.githubusercontent.com/pradt2/always-online-stun/master/valid_ipv4s.txt',
       ].map((url) =>
         fetch(url).then((resp) => resp.text(), (err) => {
-          console.warn(err);
+          this.log?.warn('iceServerFetchFailed', { url, err });
           return '';
         })
       ),
@@ -134,7 +136,7 @@ export class WebrtcTransport implements TransportPlugin {
         }
       };
       channel.onmessage = (e) => bufferedPackets.push(e.data);
-      channel.onerror = (e) => console.error(`WebRTC error:`, e);
+      channel.onerror = (e) => this.log?.error('channelError', { err: e });
       channel.onclose = (_e) => conn.close();
     };
 
@@ -166,9 +168,7 @@ export class WebrtcTransport implements TransportPlugin {
           await conn.setLocalDescription(offer);
           driver.sendSignal(JSON.stringify({ offer: conn.localDescription }));
         } else if (cmp === 0) {
-          console.error(
-            `Error negotiating WebRTC connection ordering assignment: Hash equality`,
-          );
+          this.log?.error('orderingHashEquality', {});
         }
       }
       if (offer) {

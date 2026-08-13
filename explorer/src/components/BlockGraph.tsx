@@ -1,39 +1,22 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
-import {
-  forceCollide,
-  forceLink,
-  forceSimulation,
-  forceX,
-  forceY,
-} from "d3-force";
-import type {
-  Simulation,
-  SimulationLinkDatum,
-  SimulationNodeDatum,
-} from "d3-force";
-import { useHighlightRegistry } from "../highlight/HighlightContext.ts";
-import { getContract, getContractName } from "../contracts.ts";
-import { FieldTree } from "./FieldTree.tsx";
-import { RecordingWalkerHost } from "scaffold.io/core/RecordingWalkerHost.ts";
-import type { FieldNode } from "scaffold.io/core/RecordingWalkerHost.ts";
-import { DateSummary } from "./DateSummary.tsx";
-import { Hash } from "scaffold.io/util/Hash.ts";
-import { getBlockWeightVector, SIGNATURE_CONTRACT } from "scaffold.io/core/Block.ts";
-import type { Block } from "scaffold.io/core/Block.ts";
-import type { Output } from "scaffold.io/core/BlockCreationModule.ts";
-import type { Scaffold } from "scaffold.io/Scaffold.ts";
-import { parseQuery } from "../filter/parse.ts";
-import { evaluateQuery } from "../filter/evaluate.ts";
-import type { BlockInfo } from "../filter/evaluate.ts";
-import { computeGhostHashes } from "../filter/ghost.ts";
-import type { InitialClaim } from "./BlockCreationModal.tsx";
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { forceCollide, forceLink, forceSimulation, forceX, forceY } from 'd3-force';
+import type { Simulation, SimulationLinkDatum, SimulationNodeDatum } from 'd3-force';
+import { useHighlightRegistry } from '../highlight/HighlightContext.ts';
+import { getContract, getContractName } from '../contracts.ts';
+import { FieldTree } from './FieldTree.tsx';
+import { RecordingWalkerHost } from 'scaffold.io/core/RecordingWalkerHost.ts';
+import type { FieldNode } from 'scaffold.io/core/RecordingWalkerHost.ts';
+import { DateSummary } from './DateSummary.tsx';
+import { Hash } from 'scaffold.io/util/Hash.ts';
+import { getBlockWeightVector, SIGNATURE_CONTRACT } from 'scaffold.io/core/Block.ts';
+import type { Block } from 'scaffold.io/core/Block.ts';
+import type { Output } from 'scaffold.io/core/BlockCreationModule.ts';
+import type { Scaffold } from 'scaffold.io/Scaffold.ts';
+import { parseQuery } from '../filter/parse.ts';
+import { evaluateQuery } from '../filter/evaluate.ts';
+import type { BlockInfo } from '../filter/evaluate.ts';
+import { computeGhostHashes } from '../filter/ghost.ts';
+import type { InitialClaim } from './BlockCreationModal.tsx';
 
 // -- Types ------------------------------------------------------------------
 
@@ -56,7 +39,7 @@ interface GraphNode extends SimulationNodeDatum {
 }
 
 interface GraphLink extends SimulationLinkDatum<GraphNode> {
-  type: "anchor" | "aggregate" | "ref";
+  type: 'anchor' | 'aggregate' | 'ref';
 }
 
 interface ViewBox {
@@ -77,8 +60,8 @@ const MAX_IO_DISPLAY = 5;
 const VIEWBOX_LERP = 0.12;
 const VIEWBOX_THRESHOLD = 0.5;
 
-const ZERO_HEX = "0".repeat(64);
-const DEFAULT_QUERY = "canonical head";
+const ZERO_HEX = '0'.repeat(64);
+const DEFAULT_QUERY = 'canonical head';
 
 const GHOST_WIDTH = 80;
 const GHOST_HEIGHT = 32;
@@ -86,16 +69,16 @@ const GHOST_HEIGHT = 32;
 // -- Helpers ----------------------------------------------------------------
 
 function toHex(bytes: Uint8Array): string {
-  let hex = "";
+  let hex = '';
   for (let i = 0; i < bytes.length; i++) {
-    hex += bytes[i].toString(16).padStart(2, "0");
+    hex += bytes[i].toString(16).padStart(2, '0');
   }
   return hex;
 }
 
 function formatWeightValue(v: number): string {
   if (!Number.isFinite(v)) return String(v);
-  if (v === 0) return "0";
+  if (v === 0) return '0';
   if (Number.isInteger(v) && Math.abs(v) < 1e6) return String(v);
   if (Math.abs(v) >= 1e6) return v.toExponential(1);
   // Small fractional (e.g. sampling factor 0.5) -- show 2 decimals.
@@ -176,9 +159,7 @@ function computeGraphData(
     });
   }
 
-  const sortedByDescWeight = [...nodeData].sort((a, b) =>
-    b.descendantWeight - a.descendantWeight
-  );
+  const sortedByDescWeight = [...nodeData].sort((a, b) => b.descendantWeight - a.descendantWeight);
   const rankMap = new Map<string, number>();
   sortedByDescWeight.forEach((d, i) => rankMap.set(d.hex, i));
 
@@ -223,14 +204,14 @@ function computeGraphData(
     if (anchorHex !== ZERO_HEX && nodeSet.has(anchorHex)) {
       // Skip edges between two ghost nodes
       if (!(node.isGhost && ghostHashes.has(anchorHex))) {
-        links.push({ source: node.id, target: anchorHex, type: "anchor" });
+        links.push({ source: node.id, target: anchorHex, type: 'anchor' });
       }
     }
     for (const agg of node.block.aggregates) {
       const aggHex = agg.toHex();
       if (nodeSet.has(aggHex)) {
         if (!(node.isGhost && ghostHashes.has(aggHex))) {
-          links.push({ source: node.id, target: aggHex, type: "aggregate" });
+          links.push({ source: node.id, target: aggHex, type: 'aggregate' });
         }
       }
     }
@@ -238,7 +219,7 @@ function computeGraphData(
       const refHex = ref.toHex();
       if (nodeSet.has(refHex)) {
         if (!(node.isGhost && ghostHashes.has(refHex))) {
-          links.push({ source: node.id, target: refHex, type: "ref" });
+          links.push({ source: node.id, target: refHex, type: 'ref' });
         }
       }
     }
@@ -278,15 +259,11 @@ function getConnectedHashes(hex: string, blocks: Block[]): string[] {
 }
 
 function getLinkSourceId(link: GraphLink): string {
-  return typeof link.source === "string"
-    ? link.source
-    : (link.source as GraphNode).id;
+  return typeof link.source === 'string' ? link.source : (link.source as GraphNode).id;
 }
 
 function getLinkTargetId(link: GraphLink): string {
-  return typeof link.target === "string"
-    ? link.target
-    : (link.target as GraphNode).id;
+  return typeof link.target === 'string' ? link.target : (link.target as GraphNode).id;
 }
 
 function getLinkCoords(link: GraphLink): {
@@ -298,21 +275,21 @@ function getLinkCoords(link: GraphLink): {
   const s = link.source as GraphNode;
   const t = link.target as GraphNode;
   return {
-    sx: typeof s === "string" ? 0 : (s.x ?? 0),
-    sy: typeof s === "string" ? 0 : (s.y ?? 0),
-    tx: typeof t === "string" ? 0 : (t.x ?? 0),
-    ty: typeof t === "string" ? 0 : (t.y ?? 0),
+    sx: typeof s === 'string' ? 0 : (s.x ?? 0),
+    sy: typeof s === 'string' ? 0 : (s.y ?? 0),
+    tx: typeof t === 'string' ? 0 : (t.x ?? 0),
+    ty: typeof t === 'string' ? 0 : (t.y ?? 0),
   };
 }
 
 function edgePath(link: GraphLink): string {
   const { sx, sy, tx, ty } = getLinkCoords(link);
-  if (link.type === "anchor") {
+  if (link.type === 'anchor') {
     return `M${sx},${sy}L${tx},${ty}`;
   }
   const dx = tx - sx;
   const dy = ty - sy;
-  const offset = link.type === "aggregate" ? 30 : -30;
+  const offset = link.type === 'aggregate' ? 30 : -30;
   const mx = (sx + tx) / 2 +
     (-dy / Math.max(Math.sqrt(dx * dx + dy * dy), 1)) * offset;
   const my = (sy + ty) / 2 +
@@ -353,9 +330,7 @@ function computeFitViewBox(
   if (focusedHash) interesting.add(focusedHash);
   for (const hex of pinnedHashes) interesting.add(hex);
 
-  let fitNodes = interesting.size > 0
-    ? nodes.filter((n) => interesting.has(n.id))
-    : nodes;
+  let fitNodes = interesting.size > 0 ? nodes.filter((n) => interesting.has(n.id)) : nodes;
   if (fitNodes.length === 0) fitNodes = nodes;
 
   // Bounding box of fit nodes
@@ -458,7 +433,7 @@ function HashChip(
 ) {
   return (
     <span
-      className="expanded-hash-chip"
+      className='expanded-hash-chip'
       onMouseEnter={() => registry.setHovered([hex])}
       onMouseLeave={() => registry.setHovered([])}
       onClick={(e) => {
@@ -480,14 +455,14 @@ function IOChip(
 ) {
   const contractName = getContractName(output.verifier.contract);
   return (
-    <div className="io-chip" onClick={onClick} title={label}>
-      <span className="io-chip-value">v={output.value}</span>
-      <span className="io-chip-contract">
+    <div className='io-chip' onClick={onClick} title={label}>
+      <span className='io-chip-value'>v={output.value}</span>
+      <span className='io-chip-contract'>
         {contractName ??
-          output.verifier.contract.toHex().slice(0, 8) + "\u2026"}
+          output.verifier.contract.toHex().slice(0, 8) + '\u2026'}
       </span>
       {output.verifier.params.length > 0 && (
-        <span className="io-chip-params">
+        <span className='io-chip-params'>
           {toHex(output.verifier.params).slice(0, 8)}\u2026
         </span>
       )}
@@ -523,38 +498,38 @@ function IOOverlay(
   );
 
   return (
-    <div className="io-overlay-backdrop" onClick={onClose}>
-      <div className="io-overlay-card" onClick={(e) => e.stopPropagation()}>
-        <div className="io-overlay-header">
+    <div className='io-overlay-backdrop' onClick={onClose}>
+      <div className='io-overlay-card' onClick={(e) => e.stopPropagation()}>
+        <div className='io-overlay-header'>
           <span>Output #{data.ownerOutputIndex}</span>
-          <button className="graph-detail-close" onClick={onClose}>×</button>
+          <button className='graph-detail-close' onClick={onClose}>×</button>
         </div>
-        <div className="io-overlay-row">
-          <span className="detail-label">Block</span>
-          <span className="detail-value">
+        <div className='io-overlay-row'>
+          <span className='detail-label'>Block</span>
+          <span className='detail-value'>
             <span
-              className="expanded-hash-chip"
+              className='expanded-hash-chip'
               onClick={() => onNavigate(data.ownerHash)}
             >
               {data.ownerHash.slice(0, 12)}…
             </span>
           </span>
         </div>
-        <div className="io-overlay-row">
-          <span className="detail-label">Value</span>
-          <span className="detail-value mono">{data.output.value}</span>
+        <div className='io-overlay-row'>
+          <span className='detail-label'>Value</span>
+          <span className='detail-value mono'>{data.output.value}</span>
         </div>
-        <div className="io-overlay-row">
-          <span className="detail-label">Contract</span>
-          <span className="detail-value mono">
+        <div className='io-overlay-row'>
+          <span className='detail-label'>Contract</span>
+          <span className='detail-value mono'>
             {contractName ?? data.output.verifier.contract.toHex()}
           </span>
         </div>
-        <div className="io-overlay-row">
-          <span className="detail-label">Params</span>
+        <div className='io-overlay-row'>
+          <span className='detail-label'>Params</span>
           <span
-            className="detail-value mono"
-            style={{ wordBreak: "break-all" }}
+            className='detail-value mono'
+            style={{ wordBreak: 'break-all' }}
           >
             {(() => {
               const tree = tryWalkParams(
@@ -564,19 +539,19 @@ function IOOverlay(
               if (tree && tree.length > 0) return <FieldTree nodes={tree} />;
               return data.output.verifier.params.length > 0
                 ? toHex(data.output.verifier.params)
-                : <span className="muted">empty</span>;
+                : <span className='muted'>empty</span>;
             })()}
           </span>
         </div>
-        <div className="io-overlay-row">
-          <span className="detail-label">Data</span>
+        <div className='io-overlay-row'>
+          <span className='detail-label'>Data</span>
           <span
-            className="detail-value mono"
-            style={{ wordBreak: "break-all" }}
+            className='detail-value mono'
+            style={{ wordBreak: 'break-all' }}
           >
             {(() => {
               if (!data.output.data || data.output.data.length === 0) {
-                return <span className="muted">empty</span>;
+                return <span className='muted'>empty</span>;
               }
               const tree = tryWalkData(
                 data.output.verifier.contract,
@@ -587,43 +562,39 @@ function IOOverlay(
             })()}
           </span>
         </div>
-        <div className="io-overlay-row">
-          <span className="detail-label">Claimed by</span>
-          <span className="detail-value">
-            {claimers.length === 0
-              ? <span className="muted">Unclaimed</span>
-              : (
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 4 }}
-                >
-                  {claimers.map((c) => (
-                    <div
-                      key={c.block.hash.toHex()}
-                      className="io-overlay-claimer"
+        <div className='io-overlay-row'>
+          <span className='detail-label'>Claimed by</span>
+          <span className='detail-value'>
+            {claimers.length === 0 ? <span className='muted'>Unclaimed</span> : (
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+              >
+                {claimers.map((c) => (
+                  <div
+                    key={c.block.hash.toHex()}
+                    className='io-overlay-claimer'
+                  >
+                    <span
+                      className='expanded-hash-chip'
+                      onClick={() => onNavigate(c.block.hash.toHex())}
                     >
-                      <span
-                        className="expanded-hash-chip"
-                        onClick={() => onNavigate(c.block.hash.toHex())}
-                      >
-                        {c.block.hash.toHex().slice(0, 12)}…
-                      </span>
-                      <span
-                        className={`badge badge-${
-                          c.isCanonical ? "canonical" : "non-canonical"
-                        }`}
-                      >
-                        {c.isCanonical ? "Canonical" : "Non-canonical"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+                      {c.block.hash.toHex().slice(0, 12)}…
+                    </span>
+                    <span
+                      className={`badge badge-${c.isCanonical ? 'canonical' : 'non-canonical'}`}
+                    >
+                      {c.isCanonical ? 'Canonical' : 'Non-canonical'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </span>
         </div>
         {onCreateBlock && claimers.length === 0 && (
-          <div className="io-overlay-row" style={{ justifyContent: "center" }}>
+          <div className='io-overlay-row' style={{ justifyContent: 'center' }}>
             <button
-              className="create-btn"
+              className='create-btn'
               onClick={() => {
                 onCreateBlock([{
                   blockHash: Hash.fromHex(data.ownerHash),
@@ -838,14 +809,14 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
     if (simRef.current) simRef.current.stop();
 
     const sim = forceSimulation<GraphNode>(newNodes)
-      .force("x", forceX<GraphNode>((d) => d.targetX).strength(0.15))
-      .force("y", forceY<GraphNode>((d) => d.targetY).strength(0.15))
+      .force('x', forceX<GraphNode>((d) => d.targetX).strength(0.15))
+      .force('y', forceY<GraphNode>((d) => d.targetY).strength(0.15))
       .force(
-        "collide",
+        'collide',
         forceCollide<GraphNode>(NODE_WIDTH / 2 + 4).strength(0.7),
       )
       .force(
-        "link",
+        'link',
         forceLink<GraphNode, GraphLink>(newLinks)
           .id((d) => d.id)
           .distance(NODE_WIDTH * 1.5)
@@ -853,7 +824,7 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
       )
       .alphaDecay(0.02)
       .alpha(oldPosMap.size > 0 ? 0.5 : 1)
-      .on("tick", () => {
+      .on('tick', () => {
         if (rafRef.current) return;
         rafRef.current = requestAnimationFrame(() => {
           rafRef.current = 0;
@@ -877,7 +848,7 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
     const sim = simRef.current;
     if (!sim) return;
     sim.force(
-      "collide",
+      'collide',
       forceCollide<GraphNode>((d) => {
         if ((focusedHash && d.id === focusedHash) || pinnedHashes.has(d.id)) {
           return FOCUSED_WIDTH / 2 + 10;
@@ -901,7 +872,7 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
 
     const svg = svgRef.current;
     if (svg) {
-      svg.setAttribute("viewBox", `${next.x} ${next.y} ${next.w} ${next.h}`);
+      svg.setAttribute('viewBox', `${next.x} ${next.y} ${next.w} ${next.h}`);
     }
 
     // If not converged, schedule another frame to continue animation
@@ -1002,13 +973,13 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
   }, [nodes, focusedHash, pinnedHashes]);
 
   return (
-    <div className="block-graph-container" ref={containerRef}>
+    <div className='block-graph-container' ref={containerRef}>
       {/* Search bar */}
-      <div className="graph-search-bar">
+      <div className='graph-search-bar'>
         <input
-          className="graph-search-input"
-          type="text"
-          placeholder="Filter blocks... (e.g. canonical head)"
+          className='graph-search-input'
+          type='text'
+          placeholder='Filter blocks... (e.g. canonical head)'
           value={queryText}
           onChange={(e) => setQueryText(e.target.value)}
         />
@@ -1016,49 +987,49 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
       {/* SVG canvas */}
       <svg
         ref={svgRef}
-        className="block-graph-svg"
-        preserveAspectRatio="xMidYMid meet"
+        className='block-graph-svg'
+        preserveAspectRatio='xMidYMid meet'
         onClick={() => setFocusedHash(null)}
       >
         <defs>
           <marker
-            id="arrow-anchor"
-            viewBox="0 0 10 8"
-            refX="10"
-            refY="4"
-            markerWidth="8"
-            markerHeight="6"
-            orient="auto-start-reverse"
+            id='arrow-anchor'
+            viewBox='0 0 10 8'
+            refX='10'
+            refY='4'
+            markerWidth='8'
+            markerHeight='6'
+            orient='auto-start-reverse'
           >
-            <path d="M0,0 L10,4 L0,8 Z" fill="#1d1d1f" />
+            <path d='M0,0 L10,4 L0,8 Z' fill='#1d1d1f' />
           </marker>
           <marker
-            id="arrow-aggregate"
-            viewBox="0 0 10 8"
-            refX="10"
-            refY="4"
-            markerWidth="8"
-            markerHeight="6"
-            orient="auto-start-reverse"
+            id='arrow-aggregate'
+            viewBox='0 0 10 8'
+            refX='10'
+            refY='4'
+            markerWidth='8'
+            markerHeight='6'
+            orient='auto-start-reverse'
           >
-            <path d="M0,0 L10,4 L0,8 Z" fill="#0071e3" />
+            <path d='M0,0 L10,4 L0,8 Z' fill='#0071e3' />
           </marker>
           <marker
-            id="arrow-ref"
-            viewBox="0 0 10 8"
-            refX="10"
-            refY="4"
-            markerWidth="8"
-            markerHeight="6"
-            orient="auto-start-reverse"
+            id='arrow-ref'
+            viewBox='0 0 10 8'
+            refX='10'
+            refY='4'
+            markerWidth='8'
+            markerHeight='6'
+            orient='auto-start-reverse'
           >
-            <path d="M0,0 L10,4 L0,8 Z" fill="#8e8e93" />
+            <path d='M0,0 L10,4 L0,8 Z' fill='#8e8e93' />
           </marker>
         </defs>
 
         <g>
           {/* Edges layer */}
-          <g className="edges">
+          <g className='edges'>
             {links.map((link) => {
               const sourceId = getLinkSourceId(link);
               const targetId = getLinkTargetId(link);
@@ -1075,7 +1046,7 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
           </g>
 
           {/* Nodes layer */}
-          <g className="nodes">
+          <g className='nodes'>
             {sortedNodes.map((node) => {
               const nx = node.x ?? 0;
               const ny = node.y ?? 0;
@@ -1083,23 +1054,19 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
               const isPinned = pinnedHashes.has(node.id);
               const isExpanded = isFocused || isPinned;
 
-              let statusClass = node.isCanonical
-                ? "canonical"
-                : "non-canonical";
-              if (node.hasConflicts) statusClass = "conflict";
+              let statusClass = node.isCanonical ? 'canonical' : 'non-canonical';
+              if (node.hasConflicts) statusClass = 'conflict';
 
-              const classList = ["graph-node", `graph-node-${statusClass}`];
-              if (isFocused) classList.push("focused");
-              if (isPinned) classList.push("pinned");
+              const classList = ['graph-node', `graph-node-${statusClass}`];
+              if (isFocused) classList.push('focused');
+              if (isPinned) classList.push('pinned');
 
               if (isExpanded) {
                 // -- Expanded inline node (focused or pinned) --
                 const block = node.block;
                 const authorHex = getAuthorHex(block);
                 const isGenesis = block.anchor.toHex() === ZERO_HEX;
-                const anchorBlock = !isGenesis
-                  ? ctx.store.get(block.anchor)
-                  : undefined;
+                const anchorBlock = !isGenesis ? ctx.store.get(block.anchor) : undefined;
 
                 // All claims resolved to their outputs
                 const allClaims = block.claims
@@ -1107,15 +1074,11 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                     index: ci,
                     output: resolveOutput(block, ci, anchorBlock),
                   }))
-                  .filter((c): c is { index: number; output: Output } =>
-                    !!c.output
-                  );
+                  .filter((c): c is { index: number; output: Output } => !!c.output);
 
                 // Blocks whose aggregates[] includes this block
                 const aggregatingBlocks = blocks
-                  .filter((b) =>
-                    b.aggregates.some((a) => Hash.equals(a, block.hash))
-                  )
+                  .filter((b) => b.aggregates.some((a) => Hash.equals(a, block.hash)))
                   .sort((a, b) => {
                     const aCan = consensus.isCanonical(a.hash) ? 0 : 1;
                     const bCan = consensus.isCanonical(b.hash) ? 0 : 1;
@@ -1125,7 +1088,7 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                 return (
                   <g
                     key={node.id}
-                    className={classList.join(" ")}
+                    className={classList.join(' ')}
                     transform={`translate(${nx - FOCUSED_WIDTH / 2},${
                       ny - FOCUSED_MAX_HEIGHT / 2
                     })`}
@@ -1135,21 +1098,19 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                     <foreignObject
                       width={FOCUSED_WIDTH}
                       height={FOCUSED_MAX_HEIGHT}
-                      style={{ pointerEvents: "none", overflow: "hidden" }}
+                      style={{ pointerEvents: 'none', overflow: 'hidden' }}
                     >
                       <div
                         style={{
-                          height: "100%",
-                          display: "flex",
-                          alignItems: "center",
-                          pointerEvents: "none",
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          pointerEvents: 'none',
                         }}
                       >
                         <div
-                          className={`block-expanded${
-                            isPinned ? " pinned" : ""
-                          }`}
-                          style={{ pointerEvents: "auto" }}
+                          className={`block-expanded${isPinned ? ' pinned' : ''}`}
+                          style={{ pointerEvents: 'auto' }}
                           onPointerDown={(e) => e.stopPropagation()}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1157,29 +1118,27 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                           }}
                         >
                           {/* Header */}
-                          <div className="block-expanded-header">
-                            <span className="block-expanded-hash">
+                          <div className='block-expanded-header'>
+                            <span className='block-expanded-hash'>
                               {node.id.slice(0, 12)}…
                             </span>
                             {authorHex && (
-                              <span className="block-expanded-author">
+                              <span className='block-expanded-author'>
                                 {authorHex.slice(0, 8)}…
                               </span>
                             )}
-                            <span className="block-expanded-time">
+                            <span className='block-expanded-time'>
                               <DateSummary instantMs={block.timestamp} />
                             </span>
                             <button
-                              className={`block-expanded-pin${
-                                isPinned ? " active" : ""
-                              }`}
+                              className={`block-expanded-pin${isPinned ? ' active' : ''}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 togglePin(node.id);
                               }}
-                              title={isPinned ? "Unpin" : "Pin"}
+                              title={isPinned ? 'Unpin' : 'Pin'}
                             >
-                              {isPinned ? "\u2605" : "\u2606"}
+                              {isPinned ? '\u2605' : '\u2606'}
                             </button>
                           </div>
 
@@ -1191,42 +1150,41 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                               tip: string;
                             }[] = [
                               {
-                                label: "self",
+                                label: 'self',
                                 value: node.selfRaw,
-                                tip:
-                                  "self: this block's declaredWeight (raw, before sampling).",
+                                tip: "self: this block's declaredWeight (raw, before sampling).",
                               },
                               {
-                                label: "tree",
+                                label: 'tree',
                                 value: node.treeRaw,
                                 tip:
                                   "tree: sum of the aggregation cache's chainWeights -- this block's full subtree contribution across all anchor-chain depths, before sampling.",
                               },
                               {
-                                label: "mul",
+                                label: 'mul',
                                 value: node.mul,
                                 tip:
-                                  "mul: sampling weight factor for this block. 0 = not yet sampled, 1 = fully verified.",
+                                  'mul: sampling weight factor for this block. 0 = not yet sampled, 1 = fully verified.',
                               },
                               {
-                                label: "eff",
+                                label: 'eff',
                                 value: node.effLocal,
                                 tip:
                                   "eff: this block's effective contribution = (self + tree) * mul.",
                               },
                               {
-                                label: "total",
+                                label: 'total',
                                 value: node.total,
                                 tip:
-                                  "total: ConsensusModule effectiveWeight = nodeWeights.selfWeight + nodeWeights.descendantWeight. The score consensus uses for canonicality.",
+                                  'total: ConsensusModule effectiveWeight = nodeWeights.selfWeight + nodeWeights.descendantWeight. The score consensus uses for canonicality.',
                               },
                             ];
                             return (
-                              <div className="block-expanded-weights">
+                              <div className='block-expanded-weights'>
                                 {expandedCells.map((c) => (
                                   <span
                                     key={c.label}
-                                    className="block-expanded-weight-cell"
+                                    className='block-expanded-weight-cell'
                                     onMouseEnter={(e) =>
                                       setWeightTooltip({
                                         text: c.tip,
@@ -1235,9 +1193,7 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                                       })}
                                     onMouseMove={(e) =>
                                       setWeightTooltip((prev) =>
-                                        prev
-                                          ? { ...prev, x: e.clientX, y: e.clientY }
-                                          : prev
+                                        prev ? { ...prev, x: e.clientX, y: e.clientY } : prev
                                       )}
                                     onMouseLeave={() => setWeightTooltip(null)}
                                   >
@@ -1250,14 +1206,14 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
 
                           {/* Aggregating blocks */}
                           {aggregatingBlocks.length > 0 && (
-                            <div className="block-expanded-section">
-                              <div className="block-expanded-section-label">
+                            <div className='block-expanded-section'>
+                              <div className='block-expanded-section-label'>
                                 Aggregated by ({aggregatingBlocks.length})
                               </div>
                               <div
                                 style={{
-                                  display: "flex",
-                                  flexWrap: "wrap",
+                                  display: 'flex',
+                                  flexWrap: 'wrap',
                                   gap: 4,
                                 }}
                               >
@@ -1275,10 +1231,10 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
 
                           {/* Anchor */}
                           {!isGenesis && (
-                            <div className="block-expanded-section">
-                              <div className="block-expanded-anchor">
+                            <div className='block-expanded-section'>
+                              <div className='block-expanded-anchor'>
                                 <div>
-                                  <div className="block-expanded-section-label">
+                                  <div className='block-expanded-section-label'>
                                     Anchor
                                   </div>
                                   <HashChip
@@ -1294,22 +1250,20 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                           {/* Claims + Outputs */}
                           {(allClaims.length > 0 || block.outputs.length > 0) &&
                             (
-                              <div className="block-expanded-section">
-                                <div className="block-expanded-io">
+                              <div className='block-expanded-section'>
+                                <div className='block-expanded-io'>
                                   <div>
-                                    <div className="block-expanded-section-label">
+                                    <div className='block-expanded-section-label'>
                                       Claims ({allClaims.length})
                                     </div>
                                     {allClaims.slice(0, MAX_IO_DISPLAY).map(
                                       (c) => {
-                                        const ownerHash =
-                                          c.index < block.outputs.length
-                                            ? block.hash.toHex()
-                                            : block.anchor.toHex();
-                                        const ownerOutputIndex =
-                                          c.index < block.outputs.length
-                                            ? c.index
-                                            : c.index - block.outputs.length;
+                                        const ownerHash = c.index < block.outputs.length
+                                          ? block.hash.toHex()
+                                          : block.anchor.toHex();
+                                        const ownerOutputIndex = c.index < block.outputs.length
+                                          ? c.index
+                                          : c.index - block.outputs.length;
                                         return (
                                           <IOChip
                                             key={c.index}
@@ -1327,15 +1281,13 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                                       },
                                     )}
                                     {allClaims.length > MAX_IO_DISPLAY && (
-                                      <span className="io-more">
-                                        +{allClaims.length - MAX_IO_DISPLAY}
-                                        {" "}
-                                        more
+                                      <span className='io-more'>
+                                        +{allClaims.length - MAX_IO_DISPLAY} more
                                       </span>
                                     )}
                                   </div>
                                   <div>
-                                    <div className="block-expanded-section-label">
+                                    <div className='block-expanded-section-label'>
                                       Outputs ({block.outputs.length})
                                     </div>
                                     {block.outputs.slice(0, MAX_IO_DISPLAY).map(
@@ -1355,10 +1307,8 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                                       ),
                                     )}
                                     {block.outputs.length > MAX_IO_DISPLAY && (
-                                      <span className="io-more">
-                                        +{block.outputs.length - MAX_IO_DISPLAY}
-                                        {" "}
-                                        more
+                                      <span className='io-more'>
+                                        +{block.outputs.length - MAX_IO_DISPLAY} more
                                       </span>
                                     )}
                                   </div>
@@ -1368,14 +1318,14 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
 
                           {/* Aggregated blocks */}
                           {block.aggregates.length > 0 && (
-                            <div className="block-expanded-section">
-                              <div className="block-expanded-section-label">
+                            <div className='block-expanded-section'>
+                              <div className='block-expanded-section-label'>
                                 Aggregates ({block.aggregates.length})
                               </div>
                               <div
                                 style={{
-                                  display: "flex",
-                                  flexWrap: "wrap",
+                                  display: 'flex',
+                                  flexWrap: 'wrap',
                                   gap: 4,
                                 }}
                               >
@@ -1402,10 +1352,8 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                 return (
                   <g
                     key={node.id}
-                    className="graph-node graph-node-ghost"
-                    transform={`translate(${nx - GHOST_WIDTH / 2},${
-                      ny - GHOST_HEIGHT / 2
-                    })`}
+                    className='graph-node graph-node-ghost'
+                    transform={`translate(${nx - GHOST_WIDTH / 2},${ny - GHOST_HEIGHT / 2})`}
                     onMouseEnter={() => handleNodeHover(node.id)}
                     onMouseLeave={() => handleNodeHover(null)}
                     onClick={(e) => {
@@ -1420,10 +1368,10 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                       ry={6}
                     />
                     <text
-                      className="graph-node-hash"
+                      className='graph-node-hash'
                       x={GHOST_WIDTH / 2}
                       y={20}
-                      textAnchor="middle"
+                      textAnchor='middle'
                     >
                       {node.id.slice(0, 8)}…
                     </text>
@@ -1433,18 +1381,16 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
 
               // -- Compact node --
               const statusLabel = node.hasConflicts
-                ? "CONFLICT"
+                ? 'CONFLICT'
                 : node.isCanonical
-                ? "CANONICAL"
-                : "NON-CANON";
+                ? 'CANONICAL'
+                : 'NON-CANON';
 
               return (
                 <g
                   key={node.id}
-                  className={classList.join(" ")}
-                  transform={`translate(${nx - NODE_WIDTH / 2},${
-                    ny - NODE_HEIGHT / 2
-                  })`}
+                  className={classList.join(' ')}
+                  transform={`translate(${nx - NODE_WIDTH / 2},${ny - NODE_HEIGHT / 2})`}
                   onMouseEnter={() => handleNodeHover(node.id)}
                   onMouseLeave={() => handleNodeHover(null)}
                   onClick={(e) => {
@@ -1459,46 +1405,47 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                     ry={8}
                   />
                   <text
-                    className="graph-node-hash"
+                    className='graph-node-hash'
                     x={NODE_WIDTH / 2}
                     y={18}
-                    textAnchor="middle"
+                    textAnchor='middle'
                   >
                     {node.id.slice(0, 10)}…
                   </text>
                   <text
-                    className="graph-node-status"
+                    className='graph-node-status'
                     x={NODE_WIDTH / 2}
                     y={32}
-                    textAnchor="middle"
+                    textAnchor='middle'
                   >
                     {statusLabel}
                   </text>
-                  {/* Medium-detail card: just self + total. Click to expand
-                      for the full self/tree/mul/eff/total breakdown. */}
+                  {
+                    /* Medium-detail card: just self + total. Click to expand
+                      for the full self/tree/mul/eff/total breakdown. */
+                  }
                   {(() => {
                     const cells: { label: string; value: number; tip: string }[] = [
                       {
-                        label: "self",
+                        label: 'self',
                         value: node.selfRaw,
-                        tip:
-                          "self: this block's declaredWeight (raw, before sampling).",
+                        tip: "self: this block's declaredWeight (raw, before sampling).",
                       },
                       {
-                        label: "total",
+                        label: 'total',
                         value: node.total,
                         tip:
-                          "total: ConsensusModule effectiveWeight = nodeWeights.selfWeight + nodeWeights.descendantWeight. The score consensus uses for canonicality.",
+                          'total: ConsensusModule effectiveWeight = nodeWeights.selfWeight + nodeWeights.descendantWeight. The score consensus uses for canonicality.',
                       },
                     ];
                     const slot = NODE_WIDTH / cells.length;
                     return cells.map((c, i) => (
                       <text
                         key={c.label}
-                        className="graph-node-weight-cell"
+                        className='graph-node-weight-cell'
                         x={slot * (i + 0.5)}
                         y={46}
-                        textAnchor="middle"
+                        textAnchor='middle'
                         onMouseEnter={(e) =>
                           setWeightTooltip({
                             text: c.tip,
@@ -1507,9 +1454,7 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                           })}
                         onMouseMove={(e) =>
                           setWeightTooltip((prev) =>
-                            prev
-                              ? { ...prev, x: e.clientX, y: e.clientY }
-                              : prev
+                            prev ? { ...prev, x: e.clientX, y: e.clientY } : prev
                           )}
                         onMouseLeave={() => setWeightTooltip(null)}
                       >
@@ -1537,16 +1482,15 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
       )}
 
       {/* Footer */}
-      <div className="graph-footer">
-        {displayBlocks.length} of {blocks.length}{" "}
-        block{blocks.length !== 1 ? "s" : ""}
+      <div className='graph-footer'>
+        {displayBlocks.length} of {blocks.length} block{blocks.length !== 1 ? 's' : ''}
         {ghostHashes.size > 0 && ` (${ghostHashes.size} ghost)`}
       </div>
 
       {/* Single shared tooltip for weight-cell hovers. */}
       {weightTooltip && (
         <div
-          className="graph-weight-tooltip"
+          className='graph-weight-tooltip'
           style={{
             left: weightTooltip.x + 12,
             top: weightTooltip.y + 12,

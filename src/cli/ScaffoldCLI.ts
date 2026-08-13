@@ -8,6 +8,7 @@ import { assert, todo } from '../util/functional.ts';
 import { makeDefaultConfig } from '../Config.ts';
 import { GeneratorRole } from '../roles/GeneratorRole.ts';
 import { WebsocketClientTransport } from '../../plugins/WebsocketClientTransport.ts';
+import { TextLoggingProvider } from '../../plugins/TextLoggingProvider.ts';
 import { Gossip } from '../peer/network/Gossip.ts';
 
 export enum FsNodeType {
@@ -56,7 +57,7 @@ export interface ScaffoldCliDeps {
   readStdin(): Promise<Uint8Array>;
   /** Write binary data to stdout. */
   stdout(data: Uint8Array): void;
-  /** Write a line of text to stderr. */
+  /** Write text to stderr verbatim; the caller supplies any trailing newline. */
   stderr(line: string): void;
   /** Look up an environment variable, or undefined if unset. */
   env(name: string): string | undefined;
@@ -171,7 +172,8 @@ export class ScaffoldCLI {
       `      --private_key_file <path>   Private key for signing blocks`,
       `      --bootstrap_urls <a,b,...>  Comma-separated bootstrap node URLs`,
       `      --genesis_block_file <path> Genesis block (not yet implemented)`,
-      `      --verbosity <level>         Log verbosity (not yet implemented)`,
+      `      --verbosity <spec>          Log to stderr, e.g. 'warn' or`,
+      `                                  'warn,gossip=debug'. Also \$SCAFFOLD_LOG`,
       ``,
     ].join('\n');
     this.deps.stdout(str2bin(message));
@@ -190,8 +192,16 @@ export class ScaffoldCLI {
     if (args.genesis_block_file !== undefined) {
       todo('genesis_block_file option not yet implemented');
     }
-    if (args.verbosity !== undefined) {
-      todo('verbosity option not yet implemented');
+
+    // Diagnostics go to stderr so stdout carries only the command's result.
+    // Absent both the flag and the env var, config.loggingProvider stays
+    // undefined and no subsystem logs at all.
+    const verbosity = args.verbosity ?? this.deps.env('SCAFFOLD_LOG');
+    if (verbosity !== undefined) {
+      config.loggingProvider = new TextLoggingProvider(
+        (line) => this.deps.stderr(line),
+        verbosity,
+      );
     }
 
     const scaffold = this.deps.constructScaffold(config);

@@ -62,7 +62,7 @@ export abstract class BaseContext {
       }
 
       const listeners = mapPop(this.listeners, Type);
-      if (listeners !== undefined) arrCall(listeners, obj);
+      if (listeners !== undefined) arrCall(listeners, [obj]);
     }
 
     return this.objs.get(Type) as T;

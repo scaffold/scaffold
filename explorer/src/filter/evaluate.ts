@@ -5,7 +5,7 @@
  * block matches. Pure function -- no side effects, no scaffold.io dependency.
  */
 
-import type { ComparisonOp, Predicate, Query, Term } from "./parse.ts";
+import type { ComparisonOp, Predicate, Query, Term } from './parse.ts';
 
 // -- BlockInfo --------------------------------------------------------------
 
@@ -75,26 +75,26 @@ export function evaluatePredicate(
   let result: boolean;
 
   switch (pred.type) {
-    case "boolean": {
+    case 'boolean': {
       const map: Record<string, keyof BlockInfo> = {
-        canonical: "isCanonical",
-        head: "isHead",
-        genesis: "isGenesis",
-        leaf: "isLeaf",
+        canonical: 'isCanonical',
+        head: 'isHead',
+        genesis: 'isGenesis',
+        leaf: 'isLeaf',
       };
       result = block[map[pred.name]] as boolean;
       break;
     }
-    case "comparison": {
+    case 'comparison': {
       let actual: number;
       switch (pred.key) {
-        case "weight":
+        case 'weight':
           actual = block.declaredWeight;
           break;
-        case "throughput":
+        case 'throughput':
           actual = block.throughput;
           break;
-        case "age":
+        case 'age':
           actual = now - block.receivedAt;
           break;
         default:
@@ -104,8 +104,8 @@ export function evaluatePredicate(
       result = compareValues(actual, pred.op, pred.value);
       break;
     }
-    case "function": {
-      if (pred.name === "outputs") {
+    case 'function': {
+      if (pred.name === 'outputs') {
         const prefix = pred.args[0];
         result = block.outputContracts.some((c) => c.startsWith(prefix));
       } else {
@@ -113,7 +113,7 @@ export function evaluatePredicate(
       }
       break;
     }
-    case "hash": {
+    case 'hash': {
       result = block.hash.startsWith(pred.prefix);
       break;
     }
@@ -133,15 +133,15 @@ export function compareValues(
   expected: number,
 ): boolean {
   switch (op) {
-    case ">":
+    case '>':
       return actual > expected;
-    case ">=":
+    case '>=':
       return actual >= expected;
-    case "<":
+    case '<':
       return actual < expected;
-    case "<=":
+    case '<=':
       return actual <= expected;
-    case "=":
+    case '=':
       return actual === expected;
   }
 }

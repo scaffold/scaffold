@@ -96,10 +96,5 @@ export function makeDefaultGenesis() {
 
   const genesis = generateGenesis('default', funding);
 
-  for (const [publicKey, amount] of Object.entries(funding)) {
-    console.warn(`Genesis output: ${publicKey} has ${amount}`);
-  }
-  console.warn(`Genesis block hash: ${Hash.digest(genesis).toHex()}`);
-
   return { genesis, privateKeys };
 }

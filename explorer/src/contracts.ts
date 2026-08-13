@@ -1,24 +1,24 @@
-import { Hash } from "scaffold.io/util/Hash.ts";
-import type { Contract } from "scaffold.io/contracts/Contract.ts";
+import { Hash } from 'scaffold.io/util/Hash.ts';
+import type { Contract } from 'scaffold.io/contracts/Contract.ts';
 import {
   AGGREGATION_CONTRACT,
   COLLATERAL_CONTRACT,
   INSURANCE_CONTRACT,
   RECORD_CONTRACT,
   SIGNATURE_CONTRACT,
-} from "scaffold.io/core/Block.ts";
-import { signatureContract } from "scaffold.io/contracts/SignatureContract.ts";
-import { aggregationContract } from "scaffold.io/contracts/AggregationContract.ts";
-import { collateralContract } from "scaffold.io/contracts/CollateralContract.ts";
-import { insuranceContract } from "scaffold.io/contracts/InsuranceContract.ts";
-import { recordContract } from "scaffold.io/contracts/RecordContract.ts";
+} from 'scaffold.io/core/Block.ts';
+import { signatureContract } from 'scaffold.io/contracts/SignatureContract.ts';
+import { aggregationContract } from 'scaffold.io/contracts/AggregationContract.ts';
+import { collateralContract } from 'scaffold.io/contracts/CollateralContract.ts';
+import { insuranceContract } from 'scaffold.io/contracts/InsuranceContract.ts';
+import { recordContract } from 'scaffold.io/contracts/RecordContract.ts';
 
 const WELL_KNOWN: [Hash, string, Contract][] = [
-  [SIGNATURE_CONTRACT, "Signature", signatureContract],
-  [AGGREGATION_CONTRACT, "Aggregation", aggregationContract],
-  [COLLATERAL_CONTRACT, "Collateral", collateralContract],
-  [INSURANCE_CONTRACT, "Insurance", insuranceContract],
-  [RECORD_CONTRACT, "Record", recordContract],
+  [SIGNATURE_CONTRACT, 'Signature', signatureContract],
+  [AGGREGATION_CONTRACT, 'Aggregation', aggregationContract],
+  [COLLATERAL_CONTRACT, 'Collateral', collateralContract],
+  [INSURANCE_CONTRACT, 'Insurance', insuranceContract],
+  [RECORD_CONTRACT, 'Record', recordContract],
 ];
 
 export function getContractName(hash: Hash): string | null {

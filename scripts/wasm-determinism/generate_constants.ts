@@ -45,6 +45,9 @@ const body = asZigBytes(RECORD_CONTRACT, 'RECORD_CONTRACT') +
 
 const outPath = new URL('./src/well_known.zig', import.meta.url);
 await Deno.writeTextFile(outPath, header + body);
+// deno-lint-ignore no-console
 console.log(`Wrote ${outPath.pathname}`);
+// deno-lint-ignore no-console
 console.log(`  RECORD_CONTRACT: ${RECORD_CONTRACT.toHex()}`);
+// deno-lint-ignore no-console
 console.log(`  HASH_CONTRACT:   ${HASH_CONTRACT.toHex()}`);

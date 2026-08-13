@@ -1,4 +1,4 @@
-import type { Example } from "./index.ts";
+import type { Example } from './index.ts';
 
 export const cpp: Example = {
   source: `#include <scaffold.h>
@@ -17,6 +17,6 @@ void run() {
     scaffold::setData("response", greeting);
 }
 `,
-  fetchParams: { kind: "bytes", text: "World" },
-  expectedOutput: "Hello World",
+  fetchParams: { kind: 'bytes', text: 'World' },
+  expectedOutput: 'Hello World',
 };

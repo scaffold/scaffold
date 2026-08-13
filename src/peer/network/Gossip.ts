@@ -1,7 +1,7 @@
 import { Context } from '../../Context.ts';
 import { BlockStore } from '../../graph/BlockStore.ts';
 import { AtomSource, Block } from '../../graph/types.ts';
-import { ScopedLogger } from '../../logic/EventLog.ts';
+import { ScopedLogger } from '../../logic/Logger.ts';
 import { GossipBase } from './GossipBase.ts';
 import { Transport } from './Transport.ts';
 import { Connection } from './types.ts';

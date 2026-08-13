@@ -1,4 +1,4 @@
-import { ScopedLogger } from '../../logic/EventLog.ts';
+import { ScopedLogger } from '../../logic/Logger.ts';
 import { arrConcat } from '../../util/buffer.ts';
 import { assert, range } from '../../util/functional.ts';
 import { mapPut } from '../../util/map.ts';

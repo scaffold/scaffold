@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BlockExplorerOverlay,
   findKey,
@@ -9,19 +9,19 @@ import {
   type SandboxConfig,
   saveSelectedKeyId,
   type StrategyOption,
-} from "@scaffold/explorer";
-import { YamlEditorField } from "./YamlEditorField.tsx";
-import { Scaffold, type ScaffoldConfig } from "scaffold.io/Scaffold.ts";
-import { Hash } from "scaffold.io/util/Hash.ts";
-import type { Strategy } from "scaffold.io/node/ReactiveLayer.ts";
-import { SamplingStrategy } from "scaffold.io/node/strategies/SamplingStrategy.ts";
-import { DisputeStrategy } from "scaffold.io/node/strategies/DisputeStrategy.ts";
-import { installDebugAPI } from "scaffold.io/debug/ScaffoldDebug.ts";
-import { getGenesisBlock } from "scaffold.io/genesis.ts";
-import yaml from "yaml";
-import { ChessApp } from "./chess/ChessApp.tsx";
-import { DevDemoApp, pickInitialLang } from "./dev-demo/DevDemoApp.tsx";
-import { DemoNav, type DemoRoute } from "./dev-demo/DemoNav.tsx";
+} from '@scaffold/explorer';
+import { YamlEditorField } from './YamlEditorField.tsx';
+import { Scaffold, type ScaffoldConfig } from 'scaffold.io/Scaffold.ts';
+import { Hash } from 'scaffold.io/util/Hash.ts';
+import type { Strategy } from 'scaffold.io/node/ReactiveLayer.ts';
+import { SamplingStrategy } from 'scaffold.io/node/strategies/SamplingStrategy.ts';
+import { DisputeStrategy } from 'scaffold.io/node/strategies/DisputeStrategy.ts';
+import { installDebugAPI } from 'scaffold.io/debug/ScaffoldDebug.ts';
+import { getGenesisBlock } from 'scaffold.io/genesis.ts';
+import yaml from 'yaml';
+import { ChessApp } from './chess/ChessApp.tsx';
+import { DevDemoApp, pickInitialLang } from './dev-demo/DevDemoApp.tsx';
+import { DemoNav, type DemoRoute } from './dev-demo/DemoNav.tsx';
 
 interface StrategyDef extends StrategyOption {
   create: () => Strategy;
@@ -29,15 +29,15 @@ interface StrategyDef extends StrategyOption {
 
 const STRATEGIES: StrategyDef[] = [
   {
-    key: "sampling",
-    label: "Sampling",
-    description: "Verify blocks by priority",
+    key: 'sampling',
+    label: 'Sampling',
+    description: 'Verify blocks by priority',
     create: () => new SamplingStrategy(),
   },
   {
-    key: "dispute",
-    label: "Dispute",
-    description: "Dispute invalid blocks",
+    key: 'dispute',
+    label: 'Dispute',
+    description: 'Dispute invalid blocks',
     create: () => new DisputeStrategy(),
   },
 ];
@@ -50,33 +50,29 @@ interface ParsedHash {
 }
 
 function parseHash(hash: string): ParsedHash {
-  const trimmed = hash.startsWith("#") ? hash.slice(1) : hash;
-  const qIdx = trimmed.indexOf("?");
+  const trimmed = hash.startsWith('#') ? hash.slice(1) : hash;
+  const qIdx = trimmed.indexOf('?');
   const path = qIdx === -1 ? trimmed : trimmed.slice(0, qIdx);
-  const query = qIdx === -1 ? "" : trimmed.slice(qIdx + 1);
-  const route: Route = path === "chess"
-    ? "chess"
-    : path === "dev-demo"
-    ? "dev-demo"
-    : "explorer";
+  const query = qIdx === -1 ? '' : trimmed.slice(qIdx + 1);
+  const route: Route = path === 'chess' ? 'chess' : path === 'dev-demo' ? 'dev-demo' : 'explorer';
   return { route, params: new URLSearchParams(query) };
 }
 
 function buildHash(route: Route, params: URLSearchParams): string {
-  const path = route === "explorer" ? "" : route;
+  const path = route === 'explorer' ? '' : route;
   const q = params.toString();
-  if (!path && !q) return "";
+  if (!path && !q) return '';
   if (!q) return `#${path}`;
   return `#${path}?${q}`;
 }
 
 function readHashParam(name: string): string | null {
-  if (typeof globalThis === "undefined" || !globalThis.location) return null;
+  if (typeof globalThis === 'undefined' || !globalThis.location) return null;
   return parseHash(globalThis.location.hash).params.get(name);
 }
 
 function writeHashParam(name: string, value: string | null) {
-  if (typeof globalThis === "undefined" || !globalThis.location) return;
+  if (typeof globalThis === 'undefined' || !globalThis.location) return;
   const { route, params } = parseHash(globalThis.location.hash);
   if (value === null) params.delete(name);
   else params.set(name, value);
@@ -107,24 +103,24 @@ function renderYamlEditor(
 
 export function App() {
   const [route, setRoute] = useState<Route>(() => {
-    if (typeof globalThis !== "undefined" && globalThis.location) {
+    if (typeof globalThis !== 'undefined' && globalThis.location) {
       return parseHash(globalThis.location.hash).route;
     }
-    return "explorer";
+    return 'explorer';
   });
 
   const navigate = useCallback((r: Route) => {
     setRoute(r);
-    if (typeof globalThis !== "undefined" && globalThis.location) {
+    if (typeof globalThis !== 'undefined' && globalThis.location) {
       const { params } = parseHash(globalThis.location.hash);
       globalThis.location.hash = buildHash(r, params);
     }
   }, []);
 
-  if (route === "chess") {
+  if (route === 'chess') {
     return <ChessRoute navigate={navigate} />;
   }
-  if (route === "dev-demo") {
+  if (route === 'dev-demo') {
     return <DevDemoRoute navigate={navigate} />;
   }
   return <ExplorerRoute navigate={navigate} />;
@@ -138,14 +134,13 @@ interface ChessRouteProps {
 
 function ChessRoute({ navigate }: ChessRouteProps) {
   return (
-    <div style={{ minHeight: "100vh", background: "#f5f5f7" }}>
+    <div style={{ minHeight: '100vh', background: '#f5f5f7' }}>
       <div style={toolbarStyle}>
         <span style={logoStyle}>Scaffold</span>
         <span style={dividerStyle} />
-        <DemoNav route="chess" navigate={navigate} />
+        <DemoNav route='chess' navigate={navigate} />
         <span style={{ ...hintStyle, marginLeft: 8 }}>
-          Chess demo - each move is a block, verified by the game-state
-          contract.
+          Chess demo - each move is a block, verified by the game-state contract.
         </span>
       </div>
       <ChessApp />
@@ -161,11 +156,11 @@ interface DevDemoRouteProps {
 
 function DevDemoRoute({ navigate }: DevDemoRouteProps) {
   const initialLang = useMemo(
-    () => pickInitialLang(readHashParam("lang")),
+    () => pickInitialLang(readHashParam('lang')),
     [],
   );
   const setLangInUrl = useCallback((lang: string) => {
-    writeHashParam("lang", lang);
+    writeHashParam('lang', lang);
   }, []);
   return (
     <DevDemoApp
@@ -182,7 +177,7 @@ interface ExplorerRouteProps {
   navigate: (route: Route) => void;
 }
 
-const SANDBOX_CONFIG_STORAGE = "scaffold-demo-sandbox-config-v1";
+const SANDBOX_CONFIG_STORAGE = 'scaffold-demo-sandbox-config-v1';
 
 interface PersistedSandbox {
   selectedKeyId: string | null;
@@ -191,8 +186,8 @@ interface PersistedSandbox {
   enableLogging: boolean;
   useFloodGossip: boolean;
   enablePlugins: boolean;
-  enableGenerationMode: SandboxConfig["enableGenerationMode"];
-  enableVerificationMode: SandboxConfig["enableVerificationMode"];
+  enableGenerationMode: SandboxConfig['enableGenerationMode'];
+  enableVerificationMode: SandboxConfig['enableVerificationMode'];
 }
 
 function defaultSandboxConfig(): SandboxConfig {
@@ -203,8 +198,8 @@ function defaultSandboxConfig(): SandboxConfig {
     enableLogging: true,
     useFloodGossip: false,
     enablePlugins: false,
-    enableGenerationMode: "all",
-    enableVerificationMode: "all",
+    enableGenerationMode: 'all',
+    enableVerificationMode: 'all',
   };
 }
 
@@ -218,16 +213,16 @@ function loadSandboxConfig(): SandboxConfig {
       if (Array.isArray(parsed.strategies)) {
         base.strategies = new Set(parsed.strategies);
       }
-      if (typeof parsed.enablePiggyback === "boolean") {
+      if (typeof parsed.enablePiggyback === 'boolean') {
         base.enablePiggyback = parsed.enablePiggyback;
       }
-      if (typeof parsed.enableLogging === "boolean") {
+      if (typeof parsed.enableLogging === 'boolean') {
         base.enableLogging = parsed.enableLogging;
       }
-      if (typeof parsed.useFloodGossip === "boolean") {
+      if (typeof parsed.useFloodGossip === 'boolean') {
         base.useFloodGossip = parsed.useFloodGossip;
       }
-      if (typeof parsed.enablePlugins === "boolean") {
+      if (typeof parsed.enablePlugins === 'boolean') {
         base.enablePlugins = parsed.enablePlugins;
       }
       if (parsed.enableGenerationMode) {
@@ -241,7 +236,7 @@ function loadSandboxConfig(): SandboxConfig {
     // fall back to defaults
   }
   // URL ?key=<hex> overrides the persisted selection if it matches a stored key.
-  const urlKeyId = readHashParam("key");
+  const urlKeyId = readHashParam('key');
   if (urlKeyId) {
     const known = findKey(loadKeys(), urlKeyId);
     if (known) {
@@ -293,19 +288,17 @@ function buildScaffoldConfig(
     enableLogging: config.enableLogging,
     useFloodGossip: config.useFloodGossip,
   };
-  if (config.enableGenerationMode === "none") {
+  if (config.enableGenerationMode === 'none') {
     scaffoldConfig.enableGeneration = () => false;
   }
-  if (config.enableVerificationMode === "none") {
+  if (config.enableVerificationMode === 'none') {
     scaffoldConfig.enableVerification = () => false;
   }
   return { scaffoldConfig, keyEntry };
 }
 
 function ExplorerRoute({ navigate }: ExplorerRouteProps) {
-  const [config, setConfig] = useState<SandboxConfig>(() =>
-    loadSandboxConfig()
-  );
+  const [config, setConfig] = useState<SandboxConfig>(() => loadSandboxConfig());
   const [version, setVersion] = useState(0);
 
   const { scaffold, activeKey } = useMemo(() => {
@@ -319,7 +312,7 @@ function ExplorerRoute({ navigate }: ExplorerRouteProps) {
 
   // Mirror the active key id into the URL.
   useEffect(() => {
-    writeHashParam("key", activeKey.id);
+    writeHashParam('key', activeKey.id);
     saveSelectedKeyId(activeKey.id);
   }, [activeKey.id]);
 
@@ -330,7 +323,7 @@ function ExplorerRoute({ navigate }: ExplorerRouteProps) {
       outputs: [
         {
           verifier: {
-            contract: Hash.digest("demo-contract"),
+            contract: Hash.digest('demo-contract'),
             params: new Uint8Array(0),
           },
           value: Math.floor(Math.random() * 100),
@@ -346,7 +339,7 @@ function ExplorerRoute({ navigate }: ExplorerRouteProps) {
       outputs: [
         {
           verifier: {
-            contract: Hash.digest("demo-contract"),
+            contract: Hash.digest('demo-contract'),
             params: new Uint8Array(0),
           },
           value: Math.floor(Math.random() * 100),
@@ -361,7 +354,7 @@ function ExplorerRoute({ navigate }: ExplorerRouteProps) {
         outputs: [
           {
             verifier: {
-              contract: Hash.digest("demo-contract"),
+              contract: Hash.digest('demo-contract'),
               params: new Uint8Array(0),
             },
             value: Math.floor(Math.random() * 100),
@@ -383,17 +376,15 @@ function ExplorerRoute({ navigate }: ExplorerRouteProps) {
 
   const overlayActions = (
     <>
-      <button type="button" onClick={handleAddBlock} style={btnPrimary}>
+      <button type='button' onClick={handleAddBlock} style={btnPrimary}>
         Add Block
       </button>
-      <button type="button" onClick={handleAdd5} style={btnSecondary}>
+      <button type='button' onClick={handleAdd5} style={btnSecondary}>
         Add 5
       </button>
-      {count > 0 && (
-        <span style={{ ...hintStyle, marginRight: 4 }}>+{count} added</span>
-      )}
+      {count > 0 && <span style={{ ...hintStyle, marginRight: 4 }}>+{count} added</span>}
       <span style={dividerStyle} />
-      <DemoNav route="explorer" navigate={navigate} />
+      <DemoNav route='explorer' navigate={navigate} />
     </>
   );
 
@@ -405,7 +396,7 @@ function ExplorerRoute({ navigate }: ExplorerRouteProps) {
     <BlockExplorerOverlay
       key={version}
       scaffold={scaffold}
-      defaultMode="fullscreen"
+      defaultMode='fullscreen'
       dismissable={false}
       actions={overlayActions}
       parseYaml={parseYaml}
@@ -422,19 +413,19 @@ function ExplorerRoute({ navigate }: ExplorerRouteProps) {
 
 // -- Styles ----------------------------------------------------------------
 
-const font = "-apple-system, BlinkMacSystemFont, sans-serif";
+const font = '-apple-system, BlinkMacSystemFont, sans-serif';
 
 const toolbarStyle: React.CSSProperties = {
-  padding: "10px 24px",
-  background: "rgba(255, 255, 255, 0.72)",
-  backdropFilter: "saturate(180%) blur(20px)",
-  WebkitBackdropFilter: "saturate(180%) blur(20px)",
-  borderBottom: "1px solid rgba(0, 0, 0, 0.1)",
-  display: "flex",
+  padding: '10px 24px',
+  background: 'rgba(255, 255, 255, 0.72)',
+  backdropFilter: 'saturate(180%) blur(20px)',
+  WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+  borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
+  display: 'flex',
   gap: 10,
-  alignItems: "center",
-  flexWrap: "wrap",
-  position: "sticky",
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  position: 'sticky',
   top: 0,
   zIndex: 50,
 };
@@ -442,41 +433,41 @@ const toolbarStyle: React.CSSProperties = {
 const logoStyle: React.CSSProperties = {
   fontSize: 15,
   fontWeight: 700,
-  color: "#1d1d1f",
+  color: '#1d1d1f',
   fontFamily: font,
-  letterSpacing: "-0.02em",
+  letterSpacing: '-0.02em',
 };
 
 const dividerStyle: React.CSSProperties = {
   width: 1,
   height: 20,
-  background: "#d2d2d7",
-  margin: "0 4px",
+  background: '#d2d2d7',
+  margin: '0 4px',
 };
 
 const hintStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "#8e8e93",
+  color: '#8e8e93',
   fontFamily: font,
 };
 
 const btnPrimary: React.CSSProperties = {
-  padding: "5px 12px",
-  background: "#0071e3",
-  color: "#fff",
-  border: "none",
+  padding: '5px 12px',
+  background: '#0071e3',
+  color: '#fff',
+  border: 'none',
   borderRadius: 8,
   fontSize: 12,
   fontWeight: 500,
-  cursor: "pointer",
+  cursor: 'pointer',
   fontFamily: font,
-  transition: "opacity 0.15s",
-  lineHeight: "20px",
+  transition: 'opacity 0.15s',
+  lineHeight: '20px',
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnPrimary,
-  background: "#f5f5f7",
-  color: "#1d1d1f",
-  border: "1px solid #d2d2d7",
+  background: '#f5f5f7',
+  color: '#1d1d1f',
+  border: '1px solid #d2d2d7',
 };

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { bin2hex } from "scaffold.io/util/hex.ts";
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { bin2hex } from 'scaffold.io/util/hex.ts';
 import {
   addRandomKey,
   deleteKey,
@@ -7,9 +7,9 @@ import {
   type KeyEntry,
   loadKeys,
   renameKey,
-} from "../config/keyStore.ts";
+} from '../config/keyStore.ts';
 
-export type GenVerifyMode = "all" | "none";
+export type GenVerifyMode = 'all' | 'none';
 
 export interface SandboxConfig {
   selectedKeyId: string;
@@ -45,7 +45,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
     open,
     current,
     strategyOptions,
-    title = "Scaffold Configuration",
+    title = 'Scaffold Configuration',
     identityNote,
     onClose,
     onApply,
@@ -53,17 +53,17 @@ export function ConfigPanel(props: ConfigPanelProps) {
 
   const [keys, setKeys] = useState<KeyEntry[]>(() => loadKeys());
   const [draft, setDraft] = useState<SandboxConfig>(current);
-  const [importHex, setImportHex] = useState("");
+  const [importHex, setImportHex] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
+  const [renameValue, setRenameValue] = useState('');
 
   // Reset draft whenever the panel reopens.
   useEffect(() => {
     if (open) {
       setDraft(current);
       setKeys(loadKeys());
-      setImportHex("");
+      setImportHex('');
       setImportError(null);
       setRenameTarget(null);
     }
@@ -96,7 +96,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
       const { keys: nextKeys, newId } = importKey(keys, importHex);
       setKeys(nextKeys);
       updateDraft({ selectedKeyId: newId });
-      setImportHex("");
+      setImportHex('');
     } catch (err) {
       setImportError(err instanceof Error ? err.message : String(err));
     }
@@ -145,17 +145,17 @@ export function ConfigPanel(props: ConfigPanelProps) {
       <div
         style={modalStyle}
         onClick={(e) => e.stopPropagation()}
-        role="dialog"
+        role='dialog'
         aria-label={title}
       >
         <div style={headerStyle}>
           <span style={titleStyle}>{title}</span>
-          <button onClick={onClose} style={iconBtnStyle} title="Close">×</button>
+          <button onClick={onClose} style={iconBtnStyle} title='Close'>×</button>
         </div>
 
         <div style={bodyStyle}>
-          <Section label="Identity (private key)">
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <Section label='Identity (private key)'>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {keys.map((k) => (
                 <KeyRow
                   key={k.id}
@@ -174,11 +174,11 @@ export function ConfigPanel(props: ConfigPanelProps) {
             </div>
             <div
               style={{
-                display: "flex",
+                display: 'flex',
                 gap: 8,
                 marginTop: 10,
-                alignItems: "center",
-                flexWrap: "wrap",
+                alignItems: 'center',
+                flexWrap: 'wrap',
               }}
             >
               <button onClick={handleGenerateKey} style={btnPrimary}>
@@ -187,7 +187,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
               <input
                 value={importHex}
                 onChange={(e) => setImportHex(e.target.value)}
-                placeholder="Import private key (64 hex chars)"
+                placeholder='Import private key (64 hex chars)'
                 style={{ ...inputStyle, flex: 1, minWidth: 240 }}
               />
               <button
@@ -200,30 +200,34 @@ export function ConfigPanel(props: ConfigPanelProps) {
             </div>
             {importError && <div style={errorStyle}>{importError}</div>}
             {selectedKey && (
-              <div style={{ marginTop: 10, fontSize: 11, color: "#6e6e73" }}>
-                <div>Public key: <Mono>{bin2hex(selectedKey.publicKey)}</Mono></div>
-                <div>Key id (priv hash): <Mono>{selectedKey.id}</Mono></div>
+              <div style={{ marginTop: 10, fontSize: 11, color: '#6e6e73' }}>
+                <div>
+                  Public key: <Mono>{bin2hex(selectedKey.publicKey)}</Mono>
+                </div>
+                <div>
+                  Key id (priv hash): <Mono>{selectedKey.id}</Mono>
+                </div>
               </div>
             )}
             {identityNote && <div style={noteStyle}>{identityNote}</div>}
           </Section>
 
           {strategyOptions.length > 0 && (
-            <Section label="Strategies">
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <Section label='Strategies'>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {strategyOptions.map((s) => (
                   <label key={s.key} style={checkRowStyle}>
                     <input
-                      type="checkbox"
+                      type='checkbox'
                       checked={draft.strategies.has(s.key)}
                       onChange={() => toggleStrategy(s.key)}
                       style={checkboxStyle}
                     />
-                    <div style={{ display: "flex", flexDirection: "column" }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <span style={{ fontSize: 13, fontWeight: 500 }}>
                         {s.label}
                       </span>
-                      <span style={{ fontSize: 11, color: "#8e8e93" }}>
+                      <span style={{ fontSize: 11, color: '#8e8e93' }}>
                         {s.description}
                       </span>
                     </div>
@@ -233,43 +237,43 @@ export function ConfigPanel(props: ConfigPanelProps) {
             </Section>
           )}
 
-          <Section label="Networking">
+          <Section label='Networking'>
             <ToggleRow
-              label="Enable P2P transports (WebSocket + WebRTC)"
-              description="Adds plugins for live peering. Off keeps the node local."
+              label='Enable P2P transports (WebSocket + WebRTC)'
+              description='Adds plugins for live peering. Off keeps the node local.'
               checked={draft.enablePlugins}
               onChange={(v) => updateDraft({ enablePlugins: v })}
             />
             <ToggleRow
-              label="Use flood gossip (demo)"
-              description="Floods every atom to all peers. Disable piggyback alongside this."
+              label='Use flood gossip (demo)'
+              description='Floods every atom to all peers. Disable piggyback alongside this.'
               checked={draft.useFloodGossip}
               onChange={(v) => updateDraft({ useFloodGossip: v })}
             />
           </Section>
 
-          <Section label="Behavior">
+          <Section label='Behavior'>
             <ToggleRow
-              label="Enable piggyback strategy"
-              description="Default. Generates claims on registered verifiers."
+              label='Enable piggyback strategy'
+              description='Default. Generates claims on registered verifiers.'
               checked={draft.enablePiggyback}
               onChange={(v) => updateDraft({ enablePiggyback: v })}
             />
             <ToggleRow
-              label="Enable structured event logging"
-              description="Powers the debug API exposed on window.__scaffold."
+              label='Enable structured event logging'
+              description='Powers the debug API exposed on window.__scaffold.'
               checked={draft.enableLogging}
               onChange={(v) => updateDraft({ enableLogging: v })}
             />
             <ChoiceRow
-              label="Generation"
-              description="Filter for which contracts run generation."
+              label='Generation'
+              description='Filter for which contracts run generation.'
               value={draft.enableGenerationMode}
               onChange={(v) => updateDraft({ enableGenerationMode: v })}
             />
             <ChoiceRow
-              label="Verification"
-              description="Filter for which contracts run verification."
+              label='Verification'
+              description='Filter for which contracts run verification.'
               value={draft.enableVerificationMode}
               onChange={(v) => updateDraft({ enableVerificationMode: v })}
             />
@@ -277,10 +281,10 @@ export function ConfigPanel(props: ConfigPanelProps) {
         </div>
 
         <div style={footerStyle}>
-          <span style={{ fontSize: 12, color: "#8e8e93" }}>
-            {dirty ? "Pending changes -- restart to apply" : "No changes"}
+          <span style={{ fontSize: 12, color: '#8e8e93' }}>
+            {dirty ? 'Pending changes -- restart to apply' : 'No changes'}
           </span>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={onClose} style={btnSecondary}>
               Cancel
             </button>
@@ -318,14 +322,14 @@ function ToggleRow(props: {
   return (
     <label style={checkRowStyle}>
       <input
-        type="checkbox"
+        type='checkbox'
         checked={props.checked}
         onChange={(e) => props.onChange(e.target.checked)}
         style={checkboxStyle}
       />
-      <div style={{ display: "flex", flexDirection: "column" }}>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
         <span style={{ fontSize: 13, fontWeight: 500 }}>{props.label}</span>
-        <span style={{ fontSize: 11, color: "#8e8e93" }}>
+        <span style={{ fontSize: 11, color: '#8e8e93' }}>
           {props.description}
         </span>
       </div>
@@ -342,15 +346,15 @@ function ChoiceRow(props: {
   return (
     <div
       style={{
-        display: "flex",
+        display: 'flex',
         gap: 12,
-        alignItems: "flex-start",
-        padding: "6px 8px",
+        alignItems: 'flex-start',
+        padding: '6px 8px',
       }}
     >
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 13, fontWeight: 500 }}>{props.label}</div>
-        <div style={{ fontSize: 11, color: "#8e8e93" }}>
+        <div style={{ fontSize: 11, color: '#8e8e93' }}>
           {props.description}
         </div>
       </div>
@@ -359,8 +363,8 @@ function ChoiceRow(props: {
         onChange={(e) => props.onChange(e.target.value as GenVerifyMode)}
         style={selectStyle}
       >
-        <option value="all">All contracts</option>
-        <option value="none">No contracts</option>
+        <option value='all'>All contracts</option>
+        <option value='none'>No contracts</option>
       </select>
     </div>
   );
@@ -382,34 +386,34 @@ function KeyRow(props: {
   const rowSelectable = !renaming && !selected;
   return (
     <div
-      role={rowSelectable ? "button" : undefined}
+      role={rowSelectable ? 'button' : undefined}
       tabIndex={rowSelectable ? 0 : -1}
       onClick={rowSelectable ? props.onSelect : undefined}
       onKeyDown={rowSelectable
         ? (e) => {
-          if (e.key === "Enter" || e.key === " ") {
+          if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             props.onSelect();
           }
         }
         : undefined}
       style={{
-        display: "flex",
-        alignItems: "center",
+        display: 'flex',
+        alignItems: 'center',
         gap: 10,
-        padding: "8px 10px",
+        padding: '8px 10px',
         borderRadius: 8,
-        border: selected ? "1px solid #0071e3" : "1px solid #d2d2d7",
-        background: selected ? "rgba(0,113,227,0.06)" : "#fff",
-        cursor: rowSelectable ? "pointer" : "default",
+        border: selected ? '1px solid #0071e3' : '1px solid #d2d2d7',
+        background: selected ? 'rgba(0,113,227,0.06)' : '#fff',
+        cursor: rowSelectable ? 'pointer' : 'default',
       }}
     >
       <input
-        type="radio"
+        type='radio'
         checked={selected}
         readOnly
         tabIndex={-1}
-        style={{ accentColor: "#0071e3", pointerEvents: "none" }}
+        style={{ accentColor: '#0071e3', pointerEvents: 'none' }}
       />
       <div style={{ flex: 1, minWidth: 0 }}>
         {renaming
@@ -420,28 +424,26 @@ function KeyRow(props: {
               onChange={(e) => props.onChangeRename(e.target.value)}
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
-                if (e.key === "Enter") props.onCommitRename();
-                if (e.key === "Escape") props.onCancelRename();
+                if (e.key === 'Enter') props.onCommitRename();
+                if (e.key === 'Escape') props.onCancelRename();
               }}
               onBlur={props.onCommitRename}
-              style={{ ...inputStyle, width: "100%" }}
+              style={{ ...inputStyle, width: '100%' }}
             />
           )
           : (
             <div
               style={{
-                display: "flex",
-                alignItems: "baseline",
+                display: 'flex',
+                alignItems: 'baseline',
                 gap: 8,
-                flexWrap: "wrap",
+                flexWrap: 'wrap',
               }}
             >
               <span style={{ fontSize: 13, fontWeight: 500 }}>
                 {entry.label}
               </span>
-              {entry.builtIn && (
-                <span style={badgeStyle}>built-in</span>
-              )}
+              {entry.builtIn && <span style={badgeStyle}>built-in</span>}
               <Mono dim>{entry.id.slice(0, 12)}…</Mono>
             </div>
           )}
@@ -454,7 +456,7 @@ function KeyRow(props: {
               props.onStartRename();
             }}
             style={smallBtn}
-            title="Rename"
+            title='Rename'
           >
             Rename
           </button>
@@ -464,7 +466,7 @@ function KeyRow(props: {
               props.onDelete();
             }}
             style={smallBtnDanger}
-            title="Delete key"
+            title='Delete key'
           >
             Delete
           </button>
@@ -478,10 +480,10 @@ function Mono(props: { children: React.ReactNode; dim?: boolean }) {
   return (
     <code
       style={{
-        fontFamily: "ui-monospace, SF Mono, Menlo, monospace",
+        fontFamily: 'ui-monospace, SF Mono, Menlo, monospace',
         fontSize: 11,
-        color: props.dim ? "#8e8e93" : "#1d1d1f",
-        wordBreak: "break-all",
+        color: props.dim ? '#8e8e93' : '#1d1d1f',
+        wordBreak: 'break-all',
       }}
     >
       {props.children}
@@ -506,40 +508,40 @@ function isEqual(a: SandboxConfig, b: SandboxConfig): boolean {
 
 // -- Styles ---------------------------------------------------------------
 
-const font = "-apple-system, BlinkMacSystemFont, sans-serif";
+const font = '-apple-system, BlinkMacSystemFont, sans-serif';
 
 const backdropStyle: React.CSSProperties = {
-  position: "fixed",
+  position: 'fixed',
   inset: 0,
-  background: "rgba(0,0,0,0.35)",
+  background: 'rgba(0,0,0,0.35)',
   zIndex: 2147483645,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   fontFamily: font,
 };
 
 const modalStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.97)",
-  backdropFilter: "blur(20px)",
-  WebkitBackdropFilter: "blur(20px)",
+  background: 'rgba(255,255,255,0.97)',
+  backdropFilter: 'blur(20px)',
+  WebkitBackdropFilter: 'blur(20px)',
   borderRadius: 12,
-  border: "1px solid #d2d2d7",
-  boxShadow: "0 12px 40px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.08)",
+  border: '1px solid #d2d2d7',
+  boxShadow: '0 12px 40px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.08)',
   width: 640,
-  maxWidth: "calc(100vw - 32px)",
-  maxHeight: "calc(100vh - 64px)",
-  display: "flex",
-  flexDirection: "column",
-  color: "#1d1d1f",
+  maxWidth: 'calc(100vw - 32px)',
+  maxHeight: 'calc(100vh - 64px)',
+  display: 'flex',
+  flexDirection: 'column',
+  color: '#1d1d1f',
 };
 
 const headerStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "14px 16px",
-  borderBottom: "1px solid #e5e5ea",
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '14px 16px',
+  borderBottom: '1px solid #e5e5ea',
 };
 
 const titleStyle: React.CSSProperties = {
@@ -551,143 +553,143 @@ const iconBtnStyle: React.CSSProperties = {
   width: 28,
   height: 28,
   borderRadius: 6,
-  border: "none",
-  background: "transparent",
+  border: 'none',
+  background: 'transparent',
   fontSize: 18,
-  cursor: "pointer",
-  color: "#1d1d1f",
+  cursor: 'pointer',
+  color: '#1d1d1f',
 };
 
 const bodyStyle: React.CSSProperties = {
   flex: 1,
-  overflowY: "auto",
-  padding: "8px 0",
+  overflowY: 'auto',
+  padding: '8px 0',
 };
 
 const sectionStyle: React.CSSProperties = {
-  padding: "12px 16px",
-  borderBottom: "1px solid #f0f0f5",
+  padding: '12px 16px',
+  borderBottom: '1px solid #f0f0f5',
 };
 
 const sectionLabelStyle: React.CSSProperties = {
   fontSize: 9,
   fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  color: "#8e8e93",
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  color: '#8e8e93',
   marginBottom: 8,
 };
 
 const checkRowStyle: React.CSSProperties = {
-  display: "flex",
+  display: 'flex',
   gap: 10,
-  alignItems: "flex-start",
-  padding: "6px 8px",
+  alignItems: 'flex-start',
+  padding: '6px 8px',
   borderRadius: 8,
-  cursor: "pointer",
+  cursor: 'pointer',
 };
 
 const checkboxStyle: React.CSSProperties = {
-  accentColor: "#0071e3",
+  accentColor: '#0071e3',
   width: 16,
   height: 16,
   marginTop: 2,
 };
 
 const inputStyle: React.CSSProperties = {
-  padding: "6px 10px",
-  border: "1px solid #d2d2d7",
+  padding: '6px 10px',
+  border: '1px solid #d2d2d7',
   borderRadius: 8,
   fontSize: 12,
-  fontFamily: "ui-monospace, SF Mono, Menlo, monospace",
-  outline: "none",
-  background: "#fff",
+  fontFamily: 'ui-monospace, SF Mono, Menlo, monospace',
+  outline: 'none',
+  background: '#fff',
 };
 
 const selectStyle: React.CSSProperties = {
-  padding: "5px 26px 5px 10px",
-  border: "1px solid #d2d2d7",
+  padding: '5px 26px 5px 10px',
+  border: '1px solid #d2d2d7',
   borderRadius: 8,
   fontSize: 12,
-  background: "#fff",
+  background: '#fff',
   fontFamily: font,
-  outline: "none",
+  outline: 'none',
 };
 
 const btnPrimary: React.CSSProperties = {
-  padding: "6px 14px",
-  background: "#0071e3",
-  color: "#fff",
-  border: "none",
+  padding: '6px 14px',
+  background: '#0071e3',
+  color: '#fff',
+  border: 'none',
   borderRadius: 8,
   fontSize: 12,
   fontWeight: 500,
-  cursor: "pointer",
+  cursor: 'pointer',
   fontFamily: font,
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnPrimary,
-  background: "#f5f5f7",
-  color: "#1d1d1f",
-  border: "1px solid #d2d2d7",
+  background: '#f5f5f7',
+  color: '#1d1d1f',
+  border: '1px solid #d2d2d7',
 };
 
 const btnSecondaryDisabled: React.CSSProperties = {
   ...btnSecondary,
   opacity: 0.5,
-  cursor: "not-allowed",
+  cursor: 'not-allowed',
 };
 
 const smallBtn: React.CSSProperties = {
-  padding: "3px 9px",
-  background: "#f5f5f7",
-  color: "#1d1d1f",
-  border: "1px solid #d2d2d7",
+  padding: '3px 9px',
+  background: '#f5f5f7',
+  color: '#1d1d1f',
+  border: '1px solid #d2d2d7',
   borderRadius: 6,
   fontSize: 11,
-  cursor: "pointer",
+  cursor: 'pointer',
   fontFamily: font,
 };
 
 const smallBtnDanger: React.CSSProperties = {
   ...smallBtn,
-  color: "#d70015",
-  borderColor: "#f5c2c2",
+  color: '#d70015',
+  borderColor: '#f5c2c2',
 };
 
 const badgeStyle: React.CSSProperties = {
   fontSize: 9,
   fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  padding: "2px 6px",
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  padding: '2px 6px',
   borderRadius: 4,
-  background: "#e5e5ea",
-  color: "#48484a",
+  background: '#e5e5ea',
+  color: '#48484a',
 };
 
 const errorStyle: React.CSSProperties = {
   marginTop: 8,
   fontSize: 12,
-  color: "#d70015",
+  color: '#d70015',
 };
 
 const noteStyle: React.CSSProperties = {
   marginTop: 10,
-  padding: "8px 10px",
+  padding: '8px 10px',
   borderRadius: 8,
-  background: "#fff7d6",
-  border: "1px solid #f3e3a8",
-  color: "#5a4a00",
+  background: '#fff7d6',
+  border: '1px solid #f3e3a8',
+  color: '#5a4a00',
   fontSize: 11,
 };
 
 const footerStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "12px 16px",
-  borderTop: "1px solid #e5e5ea",
-  background: "rgba(245,245,247,0.6)",
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '12px 16px',
+  borderTop: '1px solid #e5e5ea',
+  background: 'rgba(245,245,247,0.6)',
 };

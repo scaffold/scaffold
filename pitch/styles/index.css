@@ -35,7 +35,9 @@ html[data-theme='raw'] {
   --code-punct: #7A6E60;
 }
 
-html { color-scheme: dark; }
+html {
+  color-scheme: dark;
+}
 
 /* ============================================================
    Slidev frame
@@ -53,7 +55,9 @@ html { color-scheme: dark; }
   line-height: 1.5;
 }
 
-.slidev-layout * { box-sizing: border-box; }
+.slidev-layout * {
+  box-sizing: border-box;
+}
 
 .slidev-layout h1,
 .slidev-layout h2,
@@ -107,7 +111,11 @@ html { color-scheme: dark; }
   line-height: 1.12 !important;
 }
 
-.slidev-layout h4 { font-size: 14px !important; letter-spacing: -0.01em !important; line-height: 1.2 !important; }
+.slidev-layout h4 {
+  font-size: 14px !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.2 !important;
+}
 
 .slidev-layout em {
   font-style: normal;
@@ -123,7 +131,10 @@ html { color-scheme: dark; }
   line-height: 1.55;
 }
 
-.slidev-layout p { margin: 0 0 12px; max-width: 68ch; }
+.slidev-layout p {
+  margin: 0 0 12px;
+  max-width: 68ch;
+}
 
 .slidev-layout a {
   color: var(--accent);
@@ -172,7 +183,12 @@ html { color-scheme: dark; }
   margin: 0 0 16px;
 }
 
-.slidev-layout ul li { list-style: none; padding-left: 0; position: relative; margin: 8px 0; }
+.slidev-layout ul li {
+  list-style: none;
+  padding-left: 0;
+  position: relative;
+  margin: 8px 0;
+}
 .slidev-layout ul li::before {
   content: '';
   position: absolute;
@@ -236,8 +252,16 @@ html { color-scheme: dark; }
   color: var(--fg-3);
 }
 
-.rule { height: 1px; background: var(--border); margin: 24px 0; }
-.rule-strong { height: 1px; background: var(--fg); margin: 24px 0; }
+.rule {
+  height: 1px;
+  background: var(--border);
+  margin: 24px 0;
+}
+.rule-strong {
+  height: 1px;
+  background: var(--fg);
+  margin: 24px 0;
+}
 
 /* Brand row for cover */
 .brand-row {
@@ -249,7 +273,10 @@ html { color-scheme: dark; }
   font-size: 22px;
   letter-spacing: -0.02em;
 }
-.brand-row img { width: 30px; height: 30px; }
+.brand-row img {
+  width: 30px;
+  height: 30px;
+}
 .brand-row .v {
   color: var(--fg-3);
   font-family: var(--font-mono);
@@ -276,9 +303,15 @@ html { color-scheme: dark; }
   flex-direction: column;
   gap: 8px;
 }
-.hair-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
-.hair-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
-.hair-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.hair-grid.cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+.hair-grid.cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.hair-grid.cols-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
 
 .hair-grid .idx {
   font-family: var(--font-mono);
@@ -288,8 +321,18 @@ html { color-scheme: dark; }
   display: block;
   margin-bottom: 4px;
 }
-.hair-grid h3 { margin-bottom: 4px !important; font-size: 17px !important; line-height: 1.1 !important; }
-.hair-grid p { color: var(--fg-2); font-size: 13px; line-height: 1.5; max-width: 38ch; margin: 0; }
+.hair-grid h3 {
+  margin-bottom: 4px !important;
+  font-size: 17px !important;
+  line-height: 1.1 !important;
+}
+.hair-grid p {
+  color: var(--fg-2);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 38ch;
+  margin: 0;
+}
 
 /* Stats row */
 .stats {
@@ -304,7 +347,9 @@ html { color-scheme: dark; }
   padding: 36px 20px;
   border-right: 1px solid var(--border);
 }
-.stats .stat:last-child { border-right: none; }
+.stats .stat:last-child {
+  border-right: none;
+}
 .stats .stat .n {
   font-family: var(--font-display);
   font-size: 52px;
@@ -350,7 +395,10 @@ html { color-scheme: dark; }
   border-bottom: 1px dotted var(--border);
   color: var(--fg-2);
 }
-.spec .row b { color: var(--fg); font-weight: 500; }
+.spec .row b {
+  color: var(--fg);
+  font-weight: 500;
+}
 
 /* Two-col block */
 .two {
@@ -359,7 +407,9 @@ html { color-scheme: dark; }
   gap: 56px;
   align-items: start;
 }
-.two.even { grid-template-columns: 1fr 1fr; }
+.two.even {
+  grid-template-columns: 1fr 1fr;
+}
 
 /* Quote */
 .pullquote {
@@ -394,7 +444,10 @@ html { color-scheme: dark; }
   border: 1px solid var(--border-strong);
   color: var(--fg-2);
 }
-.badge.accent { border-color: var(--accent); color: var(--accent); }
+.badge.accent {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 /* Big type for bench-style standalone slides */
 .megaword {
@@ -427,7 +480,9 @@ html { color-scheme: dark; }
 }
 
 /* Reduce Slidev default slide transition drama */
-.slidev-layout.slidev-page { transition: none; }
+.slidev-layout.slidev-page {
+  transition: none;
+}
 
 /* Dashed connector line used in some slides */
 .dashed-rule {

@@ -300,76 +300,76 @@ export function ChessApp() {
         )}
       </div>
       <div style={pageStyle}>
-      <div style={leftPaneStyle}>
-        <Wallet pubkeyHex={myPubkeyHex} free={free} locked={locked} />
-        <GameList
-          openGames={openGames}
-          myGames={myGames}
-          myPubkey={myPubkey}
-          activeGameId={activeGameId}
-          onCreate={handleCreate}
-          onJoin={handleJoin}
-          onSelect={handleSelect}
-        />
-      </div>
+        <div style={leftPaneStyle}>
+          <Wallet pubkeyHex={myPubkeyHex} free={free} locked={locked} />
+          <GameList
+            openGames={openGames}
+            myGames={myGames}
+            myPubkey={myPubkey}
+            activeGameId={activeGameId}
+            onCreate={handleCreate}
+            onJoin={handleJoin}
+            onSelect={handleSelect}
+          />
+        </div>
 
-      <div style={boardPaneStyle}>
-        {selected
-          ? (
-            <>
-              <div style={boardHeaderStyle}>
-                <div>
-                  <div style={gameTitleStyle}>
-                    Game #{bin2hex(selected.gameId).slice(0, 8)}
+        <div style={boardPaneStyle}>
+          {selected
+            ? (
+              <>
+                <div style={boardHeaderStyle}>
+                  <div>
+                    <div style={gameTitleStyle}>
+                      Game #{bin2hex(selected.gameId).slice(0, 8)}
+                    </div>
+                    <div style={gameSubtitleStyle}>
+                      {describeStatus(status)} · pot {selected.value.toLocaleString()}
+                    </div>
                   </div>
-                  <div style={gameSubtitleStyle}>
-                    {describeStatus(status)} · pot {selected.value.toLocaleString()}
+                  <div style={clockRowStyle}>
+                    <Clock
+                      label={amBlack ? 'Opponent (White)' : 'White'}
+                      baseMs={selected.state.state.whiteClockMs}
+                      lastMoveAt={selected.state.state.lastMoveAt}
+                      ticking={!terminal && selected.state.state.toMove === 0}
+                    />
+                    <Clock
+                      label={amWhite ? 'Opponent (Black)' : 'Black'}
+                      baseMs={selected.state.state.blackClockMs}
+                      lastMoveAt={selected.state.state.lastMoveAt}
+                      ticking={!terminal && selected.state.state.toMove === 1}
+                    />
                   </div>
                 </div>
-                <div style={clockRowStyle}>
-                  <Clock
-                    label={amBlack ? 'Opponent (White)' : 'White'}
-                    baseMs={selected.state.state.whiteClockMs}
-                    lastMoveAt={selected.state.state.lastMoveAt}
-                    ticking={!terminal && selected.state.state.toMove === 0}
-                  />
-                  <Clock
-                    label={amWhite ? 'Opponent (Black)' : 'Black'}
-                    baseMs={selected.state.state.blackClockMs}
-                    lastMoveAt={selected.state.state.lastMoveAt}
-                    ticking={!terminal && selected.state.state.toMove === 1}
-                  />
+                <Board
+                  board={selected.state.state.board}
+                  orientation={orientation}
+                  onMove={handleMove}
+                  disabled={terminal || !amOnMove}
+                />
+                {version < 0 && null /* re-render dep */}
+              </>
+            )
+            : (
+              <div style={placeholderStyle}>
+                <div style={{ fontSize: 72, marginBottom: 16 }}>♟</div>
+                <div style={{ fontSize: 18, marginBottom: 4, fontWeight: 600 }}>
+                  Scaffold Chess
+                </div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: '#6e6e73',
+                    maxWidth: 360,
+                    textAlign: 'center',
+                  }}
+                >
+                  Create a game or join an open one. Each move flows through a generator: the
+                  contract blocks on getOutput, and clicking a square resolves the pending prompt.
                 </div>
               </div>
-              <Board
-                board={selected.state.state.board}
-                orientation={orientation}
-                onMove={handleMove}
-                disabled={terminal || !amOnMove}
-              />
-              {version < 0 && null /* re-render dep */}
-            </>
-          )
-          : (
-            <div style={placeholderStyle}>
-              <div style={{ fontSize: 72, marginBottom: 16 }}>♟</div>
-              <div style={{ fontSize: 18, marginBottom: 4, fontWeight: 600 }}>
-                Scaffold Chess
-              </div>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: '#6e6e73',
-                  maxWidth: 360,
-                  textAlign: 'center',
-                }}
-              >
-                Create a game or join an open one. Each move flows through a generator: the contract
-                blocks on getOutput, and clicking a square resolves the pending prompt.
-              </div>
-            </div>
-          )}
-      </div>
+            )}
+        </div>
       </div>
 
       <div style={toastContainerStyle}>
@@ -389,7 +389,7 @@ export function ChessApp() {
       <BlockExplorerOverlay
         key={scaffoldVersion}
         scaffold={scaffold}
-        pillLabel="Explorer"
+        pillLabel='Explorer'
         configPanel={{
           current: config,
           strategyOptions: [],

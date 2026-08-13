@@ -6,7 +6,7 @@ import {
   TransportPlugin,
   TransportService,
 } from '../../interfaces/transport.ts';
-import { ScopedLogger } from '../../logic/EventLog.ts';
+import { ScopedLogger } from '../../logic/Logger.ts';
 import { assert, error } from '../../util/functional.ts';
 import { MessageJoiner, MessageSplitter } from './MessageSplitter.ts';
 import { Connection } from './types.ts';

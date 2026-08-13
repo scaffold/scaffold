@@ -28,9 +28,18 @@
   --fs-hero: clamp(48px, 9vw, 128px);
 
   /* Spacing scale (4px base) --------------------------------- */
-  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
-  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
-  --sp-12: 48px; --sp-16: 64px; --sp-20: 80px; --sp-24: 96px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+  --sp-24: 96px;
   --sp-32: 128px;
 
   /* Radii ----------------------------------------------------- */
@@ -72,12 +81,12 @@
   /* Code: matched saturation/vibe of Raw — warm, high-contrast, dev-tool */
   --code-bg: #141210;
   --code-fg: #EDE5DA;
-  --code-kw: #FF7A4A;        /* keywords: softened signal orange */
-  --code-str: #C8B87A;       /* strings: warm olive/mustard */
-  --code-com: #6B6158;       /* comments: low-contrast taupe */
-  --code-fn: #E8A870;        /* function names: bronze */
-  --code-num: #D89A58;       /* numbers: amber */
-  --code-punct: #8A7E70;     /* punctuation: muted */
+  --code-kw: #FF7A4A; /* keywords: softened signal orange */
+  --code-str: #C8B87A; /* strings: warm olive/mustard */
+  --code-com: #6B6158; /* comments: low-contrast taupe */
+  --code-fn: #E8A870; /* function names: bronze */
+  --code-num: #D89A58; /* numbers: amber */
+  --code-punct: #8A7E70; /* punctuation: muted */
 }
 [data-theme="raw"][data-mode="dark"] {
   --bg: #0E0E0C;
@@ -212,11 +221,11 @@
 
   --code-bg: #0A1008;
   --code-fg: #E4EADC;
-  --code-kw: #5E9470;        /* keywords: sage */
-  --code-str: #A8C4A0;       /* strings: pale moss */
-  --code-com: #4A5A48;       /* comments: olive shade */
-  --code-fn: #C8DCBE;        /* function names: bright moss */
-  --code-num: #3E8050;       /* numbers: deep moss */
+  --code-kw: #5E9470; /* keywords: sage */
+  --code-str: #A8C4A0; /* strings: pale moss */
+  --code-com: #4A5A48; /* comments: olive shade */
+  --code-fn: #C8DCBE; /* function names: bright moss */
+  --code-num: #3E8050; /* numbers: deep moss */
   --code-punct: #788078;
 }
 [data-theme="bone"][data-mode="dark"] {
@@ -263,12 +272,12 @@
 
   --code-bg: #0B141A;
   --code-fg: #E5EEF3;
-  --code-kw: #3FA3C2;        /* keywords: brighter teal sibling of accent */
-  --code-str: #A8C4D4;       /* strings: cool slate */
-  --code-com: #4A5A64;       /* comments: muted blue-gray */
-  --code-fn: #C6DCE8;        /* function names: pale mist */
-  --code-num: #5BB0C9;       /* numbers: bright teal */
-  --code-punct: #7A8A94;     /* punctuation: cool gray */
+  --code-kw: #3FA3C2; /* keywords: brighter teal sibling of accent */
+  --code-str: #A8C4D4; /* strings: cool slate */
+  --code-com: #4A5A64; /* comments: muted blue-gray */
+  --code-fn: #C6DCE8; /* function names: pale mist */
+  --code-num: #5BB0C9; /* numbers: bright teal */
+  --code-punct: #7A8A94; /* punctuation: cool gray */
 }
 [data-theme="lime"][data-mode="dark"] {
   --bg: #0A1014;
@@ -314,11 +323,11 @@
 
   --code-bg: #140B06;
   --code-fg: #EDE0D0;
-  --code-kw: #C86A38;        /* keywords: bright copper */
-  --code-str: #C89A70;       /* strings: warm tan */
-  --code-com: #6A5848;       /* comments: dusty brown */
-  --code-fn: #E0B088;        /* function names: pale copper */
-  --code-num: #A84A1E;       /* numbers: deep copper */
+  --code-kw: #C86A38; /* keywords: bright copper */
+  --code-str: #C89A70; /* strings: warm tan */
+  --code-com: #6A5848; /* comments: dusty brown */
+  --code-fn: #E0B088; /* function names: pale copper */
+  --code-num: #A84A1E; /* numbers: deep copper */
   --code-punct: #857060;
 }
 [data-theme="mono"][data-mode="dark"] {
@@ -365,11 +374,11 @@
 
   --code-bg: #0A0E1A;
   --code-fg: #E6EAF4;
-  --code-kw: #5B7AD0;        /* keywords: mid-navy */
-  --code-str: #A8B4D0;       /* strings: slate */
-  --code-com: #484E66;       /* comments: deep slate */
-  --code-fn: #C8D0E4;        /* function names: pale ink */
-  --code-num: #7A90D8;       /* numbers: bright navy */
+  --code-kw: #5B7AD0; /* keywords: mid-navy */
+  --code-str: #A8B4D0; /* strings: slate */
+  --code-com: #484E66; /* comments: deep slate */
+  --code-fn: #C8D0E4; /* function names: pale ink */
+  --code-num: #7A90D8; /* numbers: bright navy */
   --code-punct: #747C94;
 }
 [data-theme="graphite"][data-mode="dark"] {
@@ -417,11 +426,11 @@
 
   --code-bg: #0A0A08;
   --code-fg: #E8E8E0;
-  --code-kw: #D04820;        /* keywords: coal accent */
-  --code-str: #B8B8AE;       /* strings: stone */
-  --code-com: #4A4A44;       /* comments: deep gray */
-  --code-fn: #D0D0C8;        /* function names: pale stone */
-  --code-num: #C53A18;       /* numbers: coal accent */
+  --code-kw: #D04820; /* keywords: coal accent */
+  --code-str: #B8B8AE; /* strings: stone */
+  --code-com: #4A4A44; /* comments: deep gray */
+  --code-fn: #D0D0C8; /* function names: pale stone */
+  --code-num: #C53A18; /* numbers: coal accent */
   --code-punct: #6A6A60;
 }
 [data-theme="blueprint"][data-mode="dark"] {
@@ -452,10 +461,10 @@
    ============================================================ */
 :root {
   /* Semantic — deliberately distinct from Raw brand orange */
-  --success: #2E7D4A;        /* forest green */
-  --warning: #B88410;        /* amber/ochre */
-  --danger:  #C41E3A;        /* crimson — red-pink, not orange */
-  --info:    #2D6FA8;        /* steel blue */
+  --success: #2E7D4A; /* forest green */
+  --warning: #B88410; /* amber/ochre */
+  --danger: #C41E3A; /* crimson — red-pink, not orange */
+  --info: #2D6FA8; /* steel blue */
 }
 
 /* ============================================================
@@ -473,7 +482,8 @@
 /* ============================================================
    ELEMENT DEFAULTS
    ============================================================ */
-html, body {
+html,
+body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-body);
@@ -483,7 +493,10 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
-h1, h2, h3, h4 {
+h1,
+h2,
+h3,
+h4 {
   font-family: var(--font-display);
   font-weight: 500;
   letter-spacing: -0.03em;
@@ -491,24 +504,71 @@ h1, h2, h3, h4 {
   text-wrap: balance;
   margin: 0;
 }
-h1 { font-size: var(--fs-6xl); }
-h2 { font-size: var(--fs-4xl); }
-h3 { font-size: var(--fs-2xl); letter-spacing: -0.02em; }
-h4 { font-size: var(--fs-lg); letter-spacing: -0.01em; }
+h1 {
+  font-size: var(--fs-6xl);
+}
+h2 {
+  font-size: var(--fs-4xl);
+}
+h3 {
+  font-size: var(--fs-2xl);
+  letter-spacing: -0.02em;
+}
+h4 {
+  font-size: var(--fs-lg);
+  letter-spacing: -0.01em;
+}
 
-p { margin: 0 0 1em; color: var(--fg-2); }
+p {
+  margin: 0 0 1em;
+  color: var(--fg-2);
+}
 
-code, kbd, pre, .mono { font-family: var(--font-mono); }
-code { font-size: 0.92em; }
+code,
+kbd,
+pre,
+.mono {
+  font-family: var(--font-mono);
+}
+code {
+  font-size: 0.92em;
+}
 
-hr { border: none; border-top: 1px solid var(--border); margin: var(--sp-8) 0; }
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--sp-8) 0;
+}
 
-::selection { background: var(--accent); color: var(--accent-contrast); }
+::selection {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
 
 /* Utility classes ------------------------------------------- */
-.u-mono { font-family: var(--font-mono); font-feature-settings: "ss01"; }
-.u-display { font-family: var(--font-display); letter-spacing: -0.03em; }
-.u-serif { font-family: var(--font-serif); }
-.u-label { font-family: var(--font-mono); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.12em; color: var(--fg-3); }
-.u-rule { height: 1px; background: var(--border); }
-.u-rule-strong { height: 1px; background: var(--fg); }
+.u-mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "ss01";
+}
+.u-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.03em;
+}
+.u-serif {
+  font-family: var(--font-serif);
+}
+.u-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--fg-3);
+}
+.u-rule {
+  height: 1px;
+  background: var(--border);
+}
+.u-rule-strong {
+  height: 1px;
+  background: var(--fg);
+}

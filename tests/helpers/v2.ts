@@ -3,9 +3,9 @@ import { Config } from '../../src/Config.ts';
 import { Context } from '../../src/Context.ts';
 import { DefaultContractProvider } from '../../src/contract/DefaultContractProvider.ts';
 import { WasmConfig } from '../../src/contract/wasm/WasmConfig.ts';
-import { EventLog } from '../../src/logic/EventLog.ts';
 import { fetchBlob } from '../../src/peer/blobFetch.ts';
 import { generateGenesis } from '../../src/genesis.ts';
+import { LoggingProvider } from '../../src/interfaces/LoggingProvider.ts';
 import { TransportPlugin } from '../../src/interfaces/transport.ts';
 import { Transport } from '../../src/peer/network/Transport.ts';
 import { Hash } from '../../src/util/Hash.ts';
@@ -53,9 +53,11 @@ export function makeTestConfig(options: TestConfigOptions = {}): Config {
 }
 
 export function makeTestContext(
-  options: TestConfigOptions & { eventLog?: EventLog } = {},
+  options: TestConfigOptions & { loggingProvider?: LoggingProvider } = {},
 ): Context {
-  const ctx = new Context(makeTestConfig(options), options.eventLog);
+  const config = makeTestConfig(options);
+  config.loggingProvider = options.loggingProvider;
+  const ctx = new Context(config);
   ctx.configure(WasmConfig, { fetchBlob });
 
   const plugins = options.transportPlugins ?? [];

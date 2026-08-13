@@ -1,7 +1,8 @@
 import { assert, assertEquals, assertStrictEquals, assertThrows } from '@std/assert';
 import { TimeProvider } from '../../../src/Config.ts';
 import { TransportPlugin } from '../../../src/interfaces/transport.ts';
-import { EventLog, ScopedLogger } from '../../../src/logic/EventLog.ts';
+import { EventLogProvider } from '../../../plugins/EventLogProvider.ts';
+import { ScopedLogger } from '../../../src/logic/Logger.ts';
 import { MessageSplitter } from '../../../src/peer/network/MessageSplitter.ts';
 import { TransportBase } from '../../../src/peer/network/TransportBase.ts';
 import { Connection } from '../../../src/peer/network/types.ts';
@@ -58,23 +59,23 @@ class RecordingTransport extends TransportBase {
 interface Harness {
   plugin: MockTransportPlugin;
   transport: RecordingTransport;
-  eventLog: EventLog;
+  eventLog: EventLogProvider;
 }
 
 function setup(
   options: { plugins?: TransportPlugin[]; bootstrapUrls?: string[] } = {},
 ): Harness {
   const plugin = new MockTransportPlugin();
-  const eventLog = new EventLog();
+  const eventLog = new EventLogProvider();
   const transport = new RecordingTransport(
     options.plugins ?? [plugin],
     (options.bootstrapUrls ?? []).map((url) => new URL(url)),
-    new ScopedLogger(eventLog, 'transport'),
+    ScopedLogger.create(eventLog, () => Date.now(), 'transport'),
   );
   return { plugin, transport, eventLog };
 }
 
-const warned = (eventLog: EventLog, event: string): boolean =>
+const warned = (eventLog: EventLogProvider, event: string): boolean =>
   eventLog.query({ event, level: 'warn' }).length > 0;
 
 Deno.test('every plugin is started', () => {
@@ -300,11 +301,11 @@ Deno.test('a plugin that fails to stop is logged rather than failing the shutdow
     start: () => ({ stop: () => Promise.reject(new Error('stop blew up')) }),
   };
   const working = new MockTransportPlugin();
-  const eventLog = new EventLog();
+  const eventLog = new EventLogProvider();
   const transport = new RecordingTransport(
     [failing, working],
     [],
-    new ScopedLogger(eventLog, 'transport'),
+    ScopedLogger.create(eventLog, () => Date.now(), 'transport'),
   );
 
   await transport.stop();

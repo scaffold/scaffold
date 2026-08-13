@@ -29,6 +29,7 @@ draftStore.build(draft);
 */
 
 scaffold.startTransport(new WebsocketClientTransport(), (signal) => {
+  // deno-lint-ignore no-console
   console.log(`WebSocket client announce: ${signal}`);
 });
 
@@ -45,7 +46,9 @@ await scaffold.fetch({
   contract: HELLO_CONTRACT,
   params: await scaffold.serializeParamsObj(HELLO_CONTRACT, { name: 'Joel' }),
   onResult: async (result) => {
+    // deno-lint-ignore no-console
     console.log(await result!.parse());
+    // deno-lint-ignore no-console
     console.log(bin2str(result!.body));
   },
 });

@@ -80,7 +80,7 @@ export class RunQueue implements Disposable {
         onError: reject,
       });
       this.counts[JobState.Pending]++;
-      arrCall(this.countsListeners, this.counts);
+      arrCall(this.countsListeners, [this.counts]);
       this.dispatch();
     });
   }
@@ -95,7 +95,7 @@ export class RunQueue implements Disposable {
     this.counts[entry.state]--;
     this.counts[JobState.Removed]++;
     this.jobs.delete(job);
-    arrCall(this.countsListeners, this.counts);
+    arrCall(this.countsListeners, [this.counts]);
     this.dispatch();
   }
 
@@ -156,7 +156,8 @@ export class RunQueue implements Disposable {
       handle.onDone(result);
       this.dispatch();
     }, (error) => {
-      console.error(error);
+      // Not logged here: RunQueue has no context, and handle.onError delivers
+      // the error to the caller, which logs it with the job's own scope.
       this.updateState(handle, JobState.Running, JobState.Completed);
       handle.onError(error);
       this.dispatch();
@@ -168,7 +169,7 @@ export class RunQueue implements Disposable {
     this.counts[handle.state]--;
     this.counts[newState]++;
     handle.state = newState;
-    arrCall(this.countsListeners, this.counts);
+    arrCall(this.countsListeners, [this.counts]);
   }
 
   private checkCounts() {

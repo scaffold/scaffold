@@ -4,6 +4,7 @@ import {
   serializeAggregationParams,
 } from '../contract/static/Aggregation.ts';
 import { SIGNATURE_CONTRACT } from '../contract/static/Signature.ts';
+import { ScopedLogger } from '../logic/Logger.ts';
 import { arrCall } from '../util/array.ts';
 import { EMPTY_ARR } from '../util/buffer.ts';
 import { assert, error } from '../util/functional.ts';
@@ -43,7 +44,11 @@ export class DraftStore {
   // TODO: When should we delete from this set?
   private drafts = new Set<Draft>();
 
-  constructor(private ctx: Context) {}
+  private log: ScopedLogger | undefined;
+
+  constructor(private ctx: Context) {
+    this.log = ctx.logger('draft');
+  }
 
   onBuilt(draft: Draft, cb: (block?: Block) => void, signal: AbortSignal) {
     if (signal.aborted) return;
@@ -170,13 +175,13 @@ export class DraftStore {
       }
     }
 
-    console.log(`Built block ${block.hash.toHex()}:`, result.payload);
+    this.log?.info('blockBuilt', { hash: block.hash.toHex(), payload: result.payload });
 
     // Trigger downstream listeners, first for the new block then for the draft
     this.ctx.get(BlockStore).doSkippedIngestion(block);
     for (const selDraft of selectedDrafts) {
       if (selDraft.type === DRAFT_TYPE) {
-        arrCall(selDraft.listeners, block);
+        arrCall(selDraft.listeners, [block], this.log);
       }
     }
   }

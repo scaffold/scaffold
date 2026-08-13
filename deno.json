@@ -12,7 +12,17 @@
   },
   "exclude": ["dist/", "coverage/", ".claude/", "avro/"],
   "lint": {
-    "exclude": ["viz"],
+    "exclude": [
+      "viz",
+      "legacy",
+      "legacy2",
+      "legacy3",
+      "experiments",
+      "harness",
+      "demo",
+      "explorer",
+      "tests"
+    ],
     "rules": {
       "tags": ["recommended"],
       "include": [
@@ -20,7 +30,7 @@
         "default-param-last",
         "eqeqeq",
         "guard-for-in",
-        "// no-console",
+        "no-console",
         "no-const-assign",
         "no-eval",
         "no-external-import",
@@ -50,7 +60,7 @@
     "run-server": "deno run $DENO_FLAGS --check --allow-all scripts/server.ts",
     "run-signaling-server": "deno run $DENO_FLAGS --check --allow-all scripts/signalingServer.ts",
     "test": "deno task build:wasi-shim && deno test $DENO_FLAGS --allow-all --seed=123 --trace-leaks tests/",
-    "test:v2": "deno test $DENO_FLAGS --allow-all --seed=123 --trace-leaks tests/util/ tests/logic/ tests/graph/ tests/contract/ tests/peer/ tests/roles/",
+    "test:v2": "deno test $DENO_FLAGS --allow-all --seed=123 --trace-leaks tests/util/ tests/logic/ tests/graph/ tests/contract/ tests/peer/ tests/roles/ tests/plugins/ tests/cli/",
     "test-avro": "mocha --ui tdd --reporter dot",
     "coverage": "deno test --coverage --allow-all --seed=123 ; deno coverage --lcov --output=lcov.info",
     "generate-genesis": "deno run --allow-all scripts/generate_genesis.ts",

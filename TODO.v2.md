@@ -8,7 +8,7 @@ Just launch the website
 - [ ] More efficient gossip
 - [ ] Make the CLI work
 - [x] Remove subscription box
-- [ ] Implement status bar (# of peers, blocks, etc)
+- [x] Implement status bar (# of peers, blocks, etc)
 - [ ] Rewrite "There's only three methods" to reflect the new interfaces.
 - [ ] Hide "A contract development environment" section and top menu "Explorer" link
 - [ ] More landing page content about applications and what it can be used for (see https://iii.dev/ for inspiration)
@@ -18,9 +18,9 @@ Just launch the website
 - [x] Update bottom links (remove Explorer, discord, bluesky, RSS)
 - [x] Update 404 page
 - [ ] Update getting started page
-- [ ] Update concepts page
-- [ ] Update FAQ page
-- [ ] Update "writing contracts" page
+- [x] Update concepts page
+- [x] Update FAQ page
+- [x] Update "writing contracts" page
 - [ ] Update "how it works"
 - [ ] Update community page (just github and github discussions)
 - [ ] Write blog post

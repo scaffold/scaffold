@@ -1,15 +1,19 @@
-import { LoggingProvider } from '../src/interfaces/LoggingProvider.ts';
-import { LogEvent } from '../src/interfaces/logging.ts';
+import { LogEvent, LoggingProvider, LogLevel } from '../src/interfaces/LoggingProvider.ts';
 import { str2bin } from '../src/util/buffer.ts';
 import { assert } from '../src/util/functional.ts';
 import { jsonSafeStringify } from '../src/util/json.ts';
+import { LevelFn, toLevelFn } from './logSpec.ts';
 import { isUnshared } from './util.ts';
 
+/** Newline-delimited JSON over a socket; buffers until the socket opens. */
 export class WebsocketLoggingProvider implements LoggingProvider {
   private ws: WebSocket;
   private queue?: Uint8Array[] = [];
+  private levelFn: LevelFn;
 
-  constructor(url: string) {
+  constructor(url: string, opts?: { source?: string; level?: string | LevelFn }) {
+    this.levelFn = toLevelFn(opts?.level ?? 'debug');
+    this.source = opts?.source;
     this.ws = new WebSocket(url);
     this.ws.binaryType = 'arraybuffer';
     this.ws.onopen = () => {
@@ -21,10 +25,16 @@ export class WebsocketLoggingProvider implements LoggingProvider {
     };
   }
 
-  handler(event: LogEvent, ctx: { config: { debugName: string } }) {
+  private source?: string;
+
+  level(system: string): LogLevel | undefined {
+    return this.levelFn(system);
+  }
+
+  handle(event: LogEvent): void {
     const packet = str2bin(
       jsonSafeStringify({
-        source: ctx.config.debugName,
+        source: this.source,
         ...event,
         timestamp: new Date(event.timestamp).toISOString(),
       }) + '\n',

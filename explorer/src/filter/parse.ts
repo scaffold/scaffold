@@ -26,13 +26,13 @@ export type Predicate =
   | HashPredicate;
 
 export interface BooleanPredicate {
-  type: "boolean";
+  type: 'boolean';
   name: string;
   negated: boolean;
 }
 
 export interface ComparisonPredicate {
-  type: "comparison";
+  type: 'comparison';
   key: string;
   op: ComparisonOp;
   value: number;
@@ -40,33 +40,33 @@ export interface ComparisonPredicate {
 }
 
 export interface FunctionPredicate {
-  type: "function";
+  type: 'function';
   name: string;
   args: string[];
   negated: boolean;
 }
 
 export interface HashPredicate {
-  type: "hash";
+  type: 'hash';
   prefix: string;
   negated: boolean;
 }
 
-export type ComparisonOp = ">" | ">=" | "<" | "<=" | "=";
+export type ComparisonOp = '>' | '>=' | '<' | '<=' | '=';
 
 /** Known boolean predicate names. */
 export const BOOLEAN_PREDICATES = new Set([
-  "canonical",
-  "head",
-  "genesis",
-  "leaf",
+  'canonical',
+  'head',
+  'genesis',
+  'leaf',
 ]);
 
 /** Known comparison keys. */
-export const COMPARISON_KEYS = new Set(["weight", "throughput", "age"]);
+export const COMPARISON_KEYS = new Set(['weight', 'throughput', 'age']);
 
 /** Known function names. */
-export const FUNCTION_NAMES = new Set(["outputs"]);
+export const FUNCTION_NAMES = new Set(['outputs']);
 
 // -- Duration parsing -------------------------------------------------------
 
@@ -97,9 +97,9 @@ export function parseDuration(s: string): number | null {
  */
 export function parseQuery(input: string): Query {
   const trimmed = input.trim();
-  if (trimmed === "") return [];
+  if (trimmed === '') return [];
 
-  const terms = trimmed.split(",");
+  const terms = trimmed.split(',');
   const query: Query = [];
 
   for (const termStr of terms) {
@@ -120,7 +120,7 @@ function parseToken(token: string): Predicate {
   let negated = false;
   let rest = token;
 
-  if (rest.startsWith("-")) {
+  if (rest.startsWith('-')) {
     negated = true;
     rest = rest.slice(1);
   }
@@ -129,34 +129,34 @@ function parseToken(token: string): Predicate {
   const funcMatch = rest.match(/^([a-zA-Z_]\w*)\((.+)\)$/);
   if (funcMatch) {
     const name = funcMatch[1];
-    const args = funcMatch[2].split(",").map((a) => a.trim());
-    return { type: "function", name, args, negated };
+    const args = funcMatch[2].split(',').map((a) => a.trim());
+    return { type: 'function', name, args, negated };
   }
 
   // Comparison: key:value
-  const colonIdx = rest.indexOf(":");
+  const colonIdx = rest.indexOf(':');
   if (colonIdx !== -1) {
     const key = rest.slice(0, colonIdx);
     if (COMPARISON_KEYS.has(key)) {
       let valueStr = rest.slice(colonIdx + 1);
-      let op: ComparisonOp = "=";
+      let op: ComparisonOp = '=';
 
-      if (valueStr.startsWith(">=")) {
-        op = ">=";
+      if (valueStr.startsWith('>=')) {
+        op = '>=';
         valueStr = valueStr.slice(2);
-      } else if (valueStr.startsWith(">")) {
-        op = ">";
+      } else if (valueStr.startsWith('>')) {
+        op = '>';
         valueStr = valueStr.slice(1);
-      } else if (valueStr.startsWith("<=")) {
-        op = "<=";
+      } else if (valueStr.startsWith('<=')) {
+        op = '<=';
         valueStr = valueStr.slice(2);
-      } else if (valueStr.startsWith("<")) {
-        op = "<";
+      } else if (valueStr.startsWith('<')) {
+        op = '<';
         valueStr = valueStr.slice(1);
       }
 
       let value: number;
-      if (key === "age") {
+      if (key === 'age') {
         const dur = parseDuration(valueStr);
         if (dur === null) throw new Error(`Invalid duration: ${valueStr}`);
         value = dur;
@@ -165,18 +165,18 @@ function parseToken(token: string): Predicate {
         if (isNaN(value)) throw new Error(`Invalid number: ${valueStr}`);
       }
 
-      return { type: "comparison", key, op, value, negated };
+      return { type: 'comparison', key, op, value, negated };
     }
   }
 
   // Boolean predicate
   if (BOOLEAN_PREDICATES.has(rest)) {
-    return { type: "boolean", name: rest, negated };
+    return { type: 'boolean', name: rest, negated };
   }
 
   // Hash prefix: 4+ lowercase hex chars
   if (/^[0-9a-f]{4,64}$/.test(rest)) {
-    return { type: "hash", prefix: rest, negated };
+    return { type: 'hash', prefix: rest, negated };
   }
 
   throw new Error(`Unknown predicate: ${rest}`);

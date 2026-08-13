@@ -3,6 +3,7 @@ import { Context } from './Context.ts';
 import { ContractProvider } from './contract/ContractProvider.ts';
 import { DefaultContractProvider } from './contract/DefaultContractProvider.ts';
 import { makeDefaultGenesis } from './genesis.ts';
+import { LoggingProvider } from './interfaces/LoggingProvider.ts';
 import { secp } from './util/secp.ts';
 
 export type Timeout = ReturnType<typeof globalThis.setTimeout>;
@@ -37,6 +38,10 @@ export interface Config {
   timeProvider: TimeProvider;
   entropyProvider: EntropyProvider;
   contractPlugin: ContractPlugin;
+
+  // Undefined disables logging outright: ctx.logger() then returns undefined
+  // for every subsystem and no call site pays to build a message.
+  loggingProvider?: LoggingProvider;
 }
 
 const rngSeed = 123n;

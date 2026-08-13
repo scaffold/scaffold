@@ -298,6 +298,7 @@ const ctx = new Context(config);
 
 ctx.get(NetworkService).initConnection(
   'websocket@0.0.1/server',
+  // deno-lint-ignore no-console
   (signal) => console.log(`Listening on ${signal}`),
 );
 

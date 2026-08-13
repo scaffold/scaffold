@@ -80,7 +80,11 @@
         "difficulty": "hard",
         "notes": "Only useful chained with a C compiler; superseded by the zig2wasm build above. Listed because it is the simpler, more robust of the two builds."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "Same clock/random stubbing as above." },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "Same clock/random stubbing as above."
+      },
       "sources": ["local build scripts"]
     },
     {
@@ -117,7 +121,10 @@
         "blockers": ["reinterpret (risk)"],
         "notes": "Plain C, no WasmGC, no Wasm EH, no SIMD in a default build. Main risk is the banned reinterpret family: number formatting/parsing (dtoa/strtod) and NaN-boxing bit-punch doubles. Needs an actual transformer run on the artifact to confirm; if it trips, a memcpy-based build usually avoids reinterpret."
       },
-      "sources": ["https://github.com/quickjs-ng/quickjs/releases", "https://deepwiki.com/quickjs-ng/quickjs/8.3-wasi-and-webassembly"]
+      "sources": [
+        "https://github.com/quickjs-ng/quickjs/releases",
+        "https://deepwiki.com/quickjs-ng/quickjs/8.3-wasi-and-webassembly"
+      ]
     },
     {
       "id": "quickjs-emscripten",
@@ -138,7 +145,11 @@
         "difficulty": "moderate",
         "notes": "The most ergonomic browser JS sandbox today, but the Emscripten glue is the API. For Scaffold you would rebuild the same C sources against wasi-sdk (see quickjs-ng-wasi) rather than port the glue. Asyncify variants also fight the determinism transformer's assumptions less than JSPI, but add size."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": ["emscripten-js glue"], "notes": "Requires the JS side; not a standalone module." },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": ["emscripten-js glue"],
+        "notes": "Requires the JS side; not a standalone module."
+      },
       "sources": ["https://github.com/justjake/quickjs-emscripten"]
     },
     {
@@ -170,8 +181,15 @@
         "difficulty": "easy",
         "notes": "Strongest structural fit in the whole dataset. One interpreter module deployed once as a Scaffold contract; each 'program' is a few KB of bytecode that can live in a block. The two-function plugin ABI is trivially expressible in the Scaffold ABI. Version pinning between bytecode and plugin is explicit, which suits content-addressed deployment."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": ["reinterpret (risk)"], "notes": "Same QuickJS caveats as quickjs-ng-wasi." },
-      "sources": ["https://github.com/bytecodealliance/javy", "https://deepwiki.com/bytecodealliance/javy/3.1-building-javascript-to-webassembly"]
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": ["reinterpret (risk)"],
+        "notes": "Same QuickJS caveats as quickjs-ng-wasi."
+      },
+      "sources": [
+        "https://github.com/bytecodealliance/javy",
+        "https://deepwiki.com/bytecodealliance/javy/3.1-building-javascript-to-webassembly"
+      ]
     },
     {
       "id": "quickjs-wasi-vercel",
@@ -189,12 +207,20 @@
         "outputForm": "a serialized VM state (including pending promises) restorable into a fresh instance",
         "notes": "Snapshot-as-compiler: source in, resumable interpreter state out."
       },
-      "interpreter": { "artifact": "QuickJS-NG wasm", "hostBindings": "wasi-p1", "needsJsGlue": false },
+      "interpreter": {
+        "artifact": "QuickJS-NG wasm",
+        "hostBindings": "wasi-p1",
+        "needsJsGlue": false
+      },
       "rebuildForScaffold": {
         "difficulty": "moderate",
         "notes": "Interesting for long-running/resumable executions across blocks: a snapshot is a deterministic, content-addressable continuation. One VM per instance (no shared memory between contexts) matches Scaffold isolation."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "Snapshot format must be byte-deterministic to be usable as protocol state." },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "Snapshot format must be byte-deterministic to be usable as protocol state."
+      },
       "sources": ["https://github.com/vercel-labs/quickjs-wasi"]
     },
     {
@@ -212,12 +238,20 @@
         "sourceDelivery": "JS source string",
         "outputForm": "pure wasm, no bundled interpreter"
       },
-      "interpreter": { "artifact": "the emitted module", "hostBindings": "custom", "needsJsGlue": false },
+      "interpreter": {
+        "artifact": "the emitted module",
+        "hostBindings": "custom",
+        "needsJsGlue": false
+      },
       "rebuildForScaffold": {
         "difficulty": "moderate",
         "notes": "The only true AOT JS->wasm compiler. Output is reportedly 10-30x smaller/faster than interpreter-bundling approaches, which matters enormously if every program is a separate on-chain module. The catch is language coverage: it is a research project and does not implement all of JS."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "Output is plain scalar wasm; likely the cleanest determinism story for JS if the subset is enough." },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "Output is plain scalar wasm; likely the cleanest determinism story for JS if the subset is enough."
+      },
       "sources": ["https://porffor.dev/", "https://www.igalia.com/chats/Porffor"]
     },
     {
@@ -235,12 +269,21 @@
         "sourceDelivery": "JS module + WIT world",
         "outputForm": "WASI Preview 2 component"
       },
-      "interpreter": { "artifact": "embedded SpiderMonkey", "hostBindings": "wasi-p2", "needsJsGlue": false, "notes": "Runs in browsers only after `jco transpile` back to core wasm + JS glue." },
+      "interpreter": {
+        "artifact": "embedded SpiderMonkey",
+        "hostBindings": "wasi-p2",
+        "needsJsGlue": false,
+        "notes": "Runs in browsers only after `jco transpile` back to core wasm + JS glue."
+      },
       "rebuildForScaffold": {
         "difficulty": "hard",
         "notes": "Full-fat engine (tens of MB), component-model-shaped, and browsers have no native component support -- you would transpile through jco, reintroducing JS glue. Worth knowing about for spec completeness, not a near-term Scaffold candidate."
       },
-      "determinism": { "verdict": "likely-blocked", "blockers": ["simd", "exception-handling"], "notes": "SpiderMonkey's wasm build uses features the transformer bans; a stripped rebuild is a large project." },
+      "determinism": {
+        "verdict": "likely-blocked",
+        "blockers": ["simd", "exception-handling"],
+        "notes": "SpiderMonkey's wasm build uses features the transformer bans; a stripped rebuild is a large project."
+      },
       "sources": ["https://bytecodealliance.github.io/jco/introduction.html"]
     },
     {
@@ -303,7 +346,10 @@
         "blockers": ["setjmp/longjmp (risk)"],
         "notes": "MicroPython's NLR (exception) mechanism uses setjmp/longjmp; on Emscripten that can lower to Wasm EH, which the transformer bans. Check which NLR backend the build selects."
       },
-      "sources": ["https://github.com/micropython/micropython/tree/master/ports/webassembly", "https://pyscript.net/tech-preview/micropython/about.html"]
+      "sources": [
+        "https://github.com/micropython/micropython/tree/master/ports/webassembly",
+        "https://pyscript.net/tech-preview/micropython/about.html"
+      ]
     },
     {
       "id": "monty",
@@ -324,7 +370,11 @@
         "difficulty": "easy",
         "notes": "Written in Rust and designed exactly for the constraints Scaffold has: microsecond startup, no filesystem/network/env access, only explicit developer-provided host calls, hard limits on memory and CPU. Released Feb 2026, so young, and it is a Python-like subset rather than Python."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "Rust->wasm32 with no ambient capability surface; the deliberate host-call design maps onto scaffold_env almost directly." },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "Rust->wasm32 with no ambient capability surface; the deliberate host-call design maps onto scaffold_env almost directly."
+      },
       "sources": ["https://simonwillison.net/2026/Feb/6/pydantic-monty/"]
     },
     {
@@ -334,10 +384,30 @@
       "url": "https://github.com/RustPython/RustPython",
       "maturity": "experimental",
       "confidence": "reported",
-      "compiler": { "artifact": "built-in compiler to RustPython bytecode", "hostedInWasm": true, "howToGetWasm": "buildable", "hostBindings": "custom", "sourceDelivery": "source string", "outputForm": "RustPython bytecode" },
-      "interpreter": { "artifact": "rustpython_wasm", "howToGetWasm": "prebuilt", "hostBindings": "custom", "needsJsGlue": true, "notes": "wasm-bindgen glue by default; a wasm32-wasip1 build also exists." },
-      "rebuildForScaffold": { "difficulty": "moderate", "notes": "Pure Rust, so retargeting imports is a Cargo feature/shim exercise rather than a C build-system fight. Larger and slower than MicroPython, less complete than CPython." },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "Watch for SIMD in dependencies (hashbrown/ahash) -- build with target features off." },
+      "compiler": {
+        "artifact": "built-in compiler to RustPython bytecode",
+        "hostedInWasm": true,
+        "howToGetWasm": "buildable",
+        "hostBindings": "custom",
+        "sourceDelivery": "source string",
+        "outputForm": "RustPython bytecode"
+      },
+      "interpreter": {
+        "artifact": "rustpython_wasm",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "custom",
+        "needsJsGlue": true,
+        "notes": "wasm-bindgen glue by default; a wasm32-wasip1 build also exists."
+      },
+      "rebuildForScaffold": {
+        "difficulty": "moderate",
+        "notes": "Pure Rust, so retargeting imports is a Cargo feature/shim exercise rather than a C build-system fight. Larger and slower than MicroPython, less complete than CPython."
+      },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "Watch for SIMD in dependencies (hashbrown/ahash) -- build with target features off."
+      },
       "sources": ["https://github.com/RustPython/RustPython"]
     },
     {
@@ -347,11 +417,31 @@
       "url": "https://github.com/bytecodealliance/componentize-py",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "componentize-py CLI", "hostedInWasm": false, "howToGetWasm": "plausible", "hostBindings": "wasi-p2", "sourceDelivery": "Python app + WIT world", "outputForm": "WASI-p2 component with CPython embedded" },
-      "interpreter": { "artifact": "embedded CPython", "hostBindings": "wasi-p2", "needsJsGlue": false },
-      "rebuildForScaffold": { "difficulty": "hard", "notes": "Component-model-first; browsers need jco transpilation. Same size problem as Pyodide." },
-      "determinism": { "verdict": "likely-blocked", "blockers": ["wasi-p2 host surface"], "notes": "" },
-      "sources": ["https://component-model.bytecodealliance.org/language-support/building-a-simple-component/python.html"]
+      "compiler": {
+        "artifact": "componentize-py CLI",
+        "hostedInWasm": false,
+        "howToGetWasm": "plausible",
+        "hostBindings": "wasi-p2",
+        "sourceDelivery": "Python app + WIT world",
+        "outputForm": "WASI-p2 component with CPython embedded"
+      },
+      "interpreter": {
+        "artifact": "embedded CPython",
+        "hostBindings": "wasi-p2",
+        "needsJsGlue": false
+      },
+      "rebuildForScaffold": {
+        "difficulty": "hard",
+        "notes": "Component-model-first; browsers need jco transpilation. Same size problem as Pyodide."
+      },
+      "determinism": {
+        "verdict": "likely-blocked",
+        "blockers": ["wasi-p2 host surface"],
+        "notes": ""
+      },
+      "sources": [
+        "https://component-model.bytecodealliance.org/language-support/building-a-simple-component/python.html"
+      ]
     },
     {
       "id": "python-wasmer",
@@ -361,10 +451,27 @@
       "maturity": "stable",
       "confidence": "reported",
       "compiler": null,
-      "interpreter": { "artifact": "python.wasm", "howToGetWasm": "prebuilt", "hostBindings": "wasix", "sourceDelivery": "argv + WASI filesystem", "needsJsGlue": false, "notes": "Runs in-browser through @wasmer/sdk, which implements WASIX in JS." },
-      "rebuildForScaffold": { "difficulty": "hard", "notes": "WASIX is a much larger host surface than WASI p1 (threads, sockets, posix_spawn). Shimming all of it over scaffold_env is not realistic; you would rebuild CPython against wasi-sdk instead." },
-      "determinism": { "verdict": "likely-blocked", "blockers": ["wasix host surface", "threads"], "notes": "" },
-      "sources": ["https://wasmlabs.dev/articles/python-wasm-rust/", "https://docs.wasmer.io/registry/"]
+      "interpreter": {
+        "artifact": "python.wasm",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "wasix",
+        "sourceDelivery": "argv + WASI filesystem",
+        "needsJsGlue": false,
+        "notes": "Runs in-browser through @wasmer/sdk, which implements WASIX in JS."
+      },
+      "rebuildForScaffold": {
+        "difficulty": "hard",
+        "notes": "WASIX is a much larger host surface than WASI p1 (threads, sockets, posix_spawn). Shimming all of it over scaffold_env is not realistic; you would rebuild CPython against wasi-sdk instead."
+      },
+      "determinism": {
+        "verdict": "likely-blocked",
+        "blockers": ["wasix host surface", "threads"],
+        "notes": ""
+      },
+      "sources": [
+        "https://wasmlabs.dev/articles/python-wasm-rust/",
+        "https://docs.wasmer.io/registry/"
+      ]
     },
     {
       "id": "lpython",
@@ -373,11 +480,33 @@
       "url": "https://lpython.org/",
       "maturity": "experimental",
       "confidence": "reported",
-      "compiler": { "artifact": "lpython with WASM backend", "hostedInWasm": true, "howToGetWasm": "buildable", "hostBindings": "emscripten-js", "sourceDelivery": "source string", "outputForm": "wasm module (direct WASM backend, no LLVM)", "notes": "Shares its ASR/backends with LFortran, including the fast direct-to-WASM backend." },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "custom", "needsJsGlue": false },
-      "rebuildForScaffold": { "difficulty": "moderate", "notes": "Alpha-stage compiler, but the architecture -- compiler-in-wasm emitting plain scalar wasm without LLVM -- is exactly the shape you want." },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "Direct WASM backend emits simple scalar code." },
-      "sources": ["https://lpython.org/", "https://lfortran.org/blog/2024/05/fortran-on-web-using-lfortran/"]
+      "compiler": {
+        "artifact": "lpython with WASM backend",
+        "hostedInWasm": true,
+        "howToGetWasm": "buildable",
+        "hostBindings": "emscripten-js",
+        "sourceDelivery": "source string",
+        "outputForm": "wasm module (direct WASM backend, no LLVM)",
+        "notes": "Shares its ASR/backends with LFortran, including the fast direct-to-WASM backend."
+      },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "custom",
+        "needsJsGlue": false
+      },
+      "rebuildForScaffold": {
+        "difficulty": "moderate",
+        "notes": "Alpha-stage compiler, but the architecture -- compiler-in-wasm emitting plain scalar wasm without LLVM -- is exactly the shape you want."
+      },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "Direct WASM backend emits simple scalar code."
+      },
+      "sources": [
+        "https://lpython.org/",
+        "https://lfortran.org/blog/2024/05/fortran-on-web-using-lfortran/"
+      ]
     },
     {
       "id": "ruby-wasm",
@@ -395,14 +524,28 @@
         "outputForm": "a new self-contained .wasm with the files packed into a virtual filesystem baked into the module",
         "notes": "wasi-vfs is a genuine 'source in, interpreter out' compiler stage: it links a static VFS into the interpreter module without rebuilding Ruby."
       },
-      "interpreter": { "artifact": "ruby.wasm", "howToGetWasm": "prebuilt", "hostBindings": "wasi-p1", "sourceDelivery": "packed VFS, or eval via the JS bindings", "approxSizeMB": 20, "needsJsGlue": false },
+      "interpreter": {
+        "artifact": "ruby.wasm",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "wasi-p1",
+        "sourceDelivery": "packed VFS, or eval via the JS bindings",
+        "approxSizeMB": 20,
+        "needsJsGlue": false
+      },
       "statusNote": "Actively maintained (@ruby/wasm-wasi 2.9.x as of mid-2026). No threads, no networking on the WASI target.",
       "rebuildForScaffold": {
         "difficulty": "moderate",
         "notes": "The wasi-vfs pattern is worth stealing regardless of language: it turns 'source S' into 'a content-addressed module that contains S'. Ruby itself is large and uses a conservative stack-scanning GC, which needs care under any custom host."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "Uses setjmp/longjmp and stack scanning; verify against the transformer. Size makes per-execution instantiation expensive." },
-      "sources": ["https://github.com/ruby/ruby.wasm", "https://github.com/kateinoigakukun/wasi-vfs/wiki/Getting-Started-with-CRuby"]
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "Uses setjmp/longjmp and stack scanning; verify against the transformer. Size makes per-execution instantiation expensive."
+      },
+      "sources": [
+        "https://github.com/ruby/ruby.wasm",
+        "https://github.com/kateinoigakukun/wasi-vfs/wiki/Getting-Started-with-CRuby"
+      ]
     },
     {
       "id": "php-wasm",
@@ -425,8 +568,15 @@
         "difficulty": "hard",
         "notes": "One of the most production-proven wasm language runtimes anywhere, but it is Emscripten to the core: dynamic .so loading, a JS-implemented filesystem, and a C API module designed around JS. Not a near-term ABI port."
       },
-      "determinism": { "verdict": "likely-blocked", "blockers": ["emscripten-js glue", "dynamic linking"], "notes": "" },
-      "sources": ["https://wordpress.github.io/wordpress-playground/developers/architecture/wasm-php-overview/", "https://make.wordpress.org/playground/2026/03/11/how-wordpress-playground-cut-php-wasm-binary-sizes-by-122-mb/"]
+      "determinism": {
+        "verdict": "likely-blocked",
+        "blockers": ["emscripten-js glue", "dynamic linking"],
+        "notes": ""
+      },
+      "sources": [
+        "https://wordpress.github.io/wordpress-playground/developers/architecture/wasm-php-overview/",
+        "https://make.wordpress.org/playground/2026/03/11/how-wordpress-playground-cut-php-wasm-binary-sizes-by-122-mb/"
+      ]
     },
     {
       "id": "wasmoon",
@@ -435,8 +585,22 @@
       "url": "https://github.com/ceifa/wasmoon",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "luac (built into the Lua VM: string.dump / load)", "hostedInWasm": true, "howToGetWasm": "prebuilt", "hostBindings": "custom", "sourceDelivery": "source string", "outputForm": "Lua bytecode chunk" },
-      "interpreter": { "artifact": "glue.wasm", "howToGetWasm": "prebuilt", "hostBindings": "emscripten-js", "sourceDelivery": "source string or bytecode chunk", "needsJsGlue": true, "notes": "No WASI bindings; the interop layer is JS." },
+      "compiler": {
+        "artifact": "luac (built into the Lua VM: string.dump / load)",
+        "hostedInWasm": true,
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "custom",
+        "sourceDelivery": "source string",
+        "outputForm": "Lua bytecode chunk"
+      },
+      "interpreter": {
+        "artifact": "glue.wasm",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "emscripten-js",
+        "sourceDelivery": "source string or bytecode chunk",
+        "needsJsGlue": true,
+        "notes": "No WASI bindings; the interop layer is JS."
+      },
       "rebuildForScaffold": {
         "difficulty": "easy",
         "notes": "Lua is the classic embeddable interpreter: ~250KB of ANSI C, a documented C API, and a built-in bytecode compiler you get for free. Building vanilla Lua against wasi-sdk or wasm32-freestanding with a scaffold_env import table is a weekend project, and load()/string.dump() gives you the compiler/interpreter split natively."
@@ -456,10 +620,26 @@
       "maturity": "experimental",
       "confidence": "reported",
       "compiler": null,
-      "interpreter": { "artifact": "emperl.wasm", "howToGetWasm": "prebuilt", "hostBindings": "emscripten-js", "sourceDelivery": "Perl source string", "needsJsGlue": true },
-      "rebuildForScaffold": { "difficulty": "hard", "notes": "Browser-only, no WASI implementation, low current activity." },
-      "determinism": { "verdict": "likely-blocked", "blockers": ["emscripten-js glue"], "notes": "" },
-      "sources": ["https://webperl.zero-g.net/", "https://developer.fermyon.com/wasm-languages/perl"]
+      "interpreter": {
+        "artifact": "emperl.wasm",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "emscripten-js",
+        "sourceDelivery": "Perl source string",
+        "needsJsGlue": true
+      },
+      "rebuildForScaffold": {
+        "difficulty": "hard",
+        "notes": "Browser-only, no WASI implementation, low current activity."
+      },
+      "determinism": {
+        "verdict": "likely-blocked",
+        "blockers": ["emscripten-js glue"],
+        "notes": ""
+      },
+      "sources": [
+        "https://webperl.zero-g.net/",
+        "https://developer.fermyon.com/wasm-languages/perl"
+      ]
     },
     {
       "id": "webr",
@@ -469,9 +649,22 @@
       "maturity": "stable",
       "confidence": "reported",
       "compiler": null,
-      "interpreter": { "artifact": "R.wasm + libR", "howToGetWasm": "prebuilt", "hostBindings": "emscripten-js", "sourceDelivery": "R expression string; packages from a wasm CRAN mirror", "needsJsGlue": true },
-      "rebuildForScaffold": { "difficulty": "hard", "notes": "Browser-only by design (Akamai's matrix lists R as browser-yes/WASI-no). Huge Fortran/C numerical core." },
-      "determinism": { "verdict": "likely-blocked", "blockers": ["emscripten-js glue", "floating-point-heavy"], "notes": "Numerics-first language is the worst case for cross-engine float reproducibility even with NaN canonicalization." },
+      "interpreter": {
+        "artifact": "R.wasm + libR",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "emscripten-js",
+        "sourceDelivery": "R expression string; packages from a wasm CRAN mirror",
+        "needsJsGlue": true
+      },
+      "rebuildForScaffold": {
+        "difficulty": "hard",
+        "notes": "Browser-only by design (Akamai's matrix lists R as browser-yes/WASI-no). Huge Fortran/C numerical core."
+      },
+      "determinism": {
+        "verdict": "likely-blocked",
+        "blockers": ["emscripten-js glue", "floating-point-heavy"],
+        "notes": "Numerics-first language is the worst case for cross-engine float reproducibility even with NaN canonicalization."
+      },
       "sources": ["https://docs.r-wasm.org/webr/latest/"]
     },
     {
@@ -481,12 +674,35 @@
       "url": "https://github.com/SWI-Prolog/npm-swipl-wasm",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "built-in consult/QLF compiler", "hostedInWasm": true, "howToGetWasm": "prebuilt", "hostBindings": "emscripten-js", "sourceDelivery": "Prolog source text", "outputForm": "in-memory clause database (QLF for persistence)" },
-      "interpreter": { "artifact": "swipl-web.wasm", "howToGetWasm": "prebuilt", "hostBindings": "emscripten-js", "sourceDelivery": "consulted source + query string", "needsJsGlue": true },
+      "compiler": {
+        "artifact": "built-in consult/QLF compiler",
+        "hostedInWasm": true,
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "emscripten-js",
+        "sourceDelivery": "Prolog source text",
+        "outputForm": "in-memory clause database (QLF for persistence)"
+      },
+      "interpreter": {
+        "artifact": "swipl-web.wasm",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "emscripten-js",
+        "sourceDelivery": "consulted source + query string",
+        "needsJsGlue": true
+      },
       "statusNote": "Officially supported by the standard build since 8.1.2; 2025 added engines for concurrent async Prolog tasks and a WASM shell debugger.",
-      "rebuildForScaffold": { "difficulty": "moderate", "notes": "Interesting fit for a consensus system: declarative, deterministic query semantics, and a natural query/answer request-response shape. Emscripten-coupled today." },
-      "determinism": { "verdict": "needs-rebuild", "blockers": ["emscripten-js glue"], "notes": "Core WAM execution is deterministic given a fixed clause order." },
-      "sources": ["https://www.swi-prolog.org/build/WebAssembly.html", "https://github.com/SWI-Prolog/swipl-wasm"]
+      "rebuildForScaffold": {
+        "difficulty": "moderate",
+        "notes": "Interesting fit for a consensus system: declarative, deterministic query semantics, and a natural query/answer request-response shape. Emscripten-coupled today."
+      },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": ["emscripten-js glue"],
+        "notes": "Core WAM execution is deterministic given a fixed clause order."
+      },
+      "sources": [
+        "https://www.swi-prolog.org/build/WebAssembly.html",
+        "https://github.com/SWI-Prolog/swipl-wasm"
+      ]
     },
     {
       "id": "lfortran",
@@ -504,10 +720,24 @@
         "outputForm": "wasm module, via either the direct WASM backend (fast) or the LLVM backend",
         "notes": "One of very few compilers that both runs as wasm and emits wasm."
       },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "custom", "needsJsGlue": false },
-      "rebuildForScaffold": { "difficulty": "moderate", "notes": "Architecturally ideal (compiler-in-wasm, no LLVM needed for the fast path); the language and the compiler's maturity are the limiting factors." },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "Float-heavy language; NaN canonicalization and a no-SIMD build are mandatory." },
-      "sources": ["https://lfortran.org/blog/2024/05/fortran-on-web-using-lfortran/", "https://fortran-lang.discourse.group/t/demo-lfortran-in-the-browser/3833"]
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "custom",
+        "needsJsGlue": false
+      },
+      "rebuildForScaffold": {
+        "difficulty": "moderate",
+        "notes": "Architecturally ideal (compiler-in-wasm, no LLVM needed for the fast path); the language and the compiler's maturity are the limiting factors."
+      },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "Float-heavy language; NaN canonicalization and a no-SIMD build are mandatory."
+      },
+      "sources": [
+        "https://lfortran.org/blog/2024/05/fortran-on-web-using-lfortran/",
+        "https://fortran-lang.discourse.group/t/demo-lfortran-in-the-browser/3833"
+      ]
     },
     {
       "id": "clang-wasmer",
@@ -527,12 +757,20 @@
         "needsJsGlue": true,
         "notes": "Needs posix_spawn (clang driver forks lld), which is why it needs WASIX rather than WASI p1. Verified working in Chrome, Firefox and Safari."
       },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "custom", "needsJsGlue": false },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "custom",
+        "needsJsGlue": false
+      },
       "rebuildForScaffold": {
         "difficulty": "hard",
         "notes": "~100MB uncompressed (target ~30MB compressed) and a process-spawning host surface. Realistic as a developer-side tool, not as an on-chain compiler contract."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": ["wasix host surface", "posix_spawn"], "notes": "Emitted modules are fine; the compiler stage is the problem." },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": ["wasix host surface", "posix_spawn"],
+        "notes": "Emitted modules are fine; the compiler stage is the problem."
+      },
       "sources": ["https://wasmer.io/posts/clang-in-browser"]
     },
     {
@@ -542,9 +780,24 @@
       "url": "https://github.com/binji/wasm-clang",
       "maturity": "experimental",
       "confidence": "reported",
-      "compiler": { "artifact": "clang.wasm + lld.wasm", "hostedInWasm": true, "howToGetWasm": "prebuilt", "hostBindings": "custom", "sourceDelivery": "in-memory virtual filesystem implemented in JS", "outputForm": ".wasm", "needsJsGlue": true },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "custom", "needsJsGlue": false },
-      "rebuildForScaffold": { "difficulty": "hard", "notes": "Predates the WASIX approach and separates clang from lld explicitly, which avoids posix_spawn -- a useful reference if you ever want an in-protocol C compiler. Old and unmaintained." },
+      "compiler": {
+        "artifact": "clang.wasm + lld.wasm",
+        "hostedInWasm": true,
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "custom",
+        "sourceDelivery": "in-memory virtual filesystem implemented in JS",
+        "outputForm": ".wasm",
+        "needsJsGlue": true
+      },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "custom",
+        "needsJsGlue": false
+      },
+      "rebuildForScaffold": {
+        "difficulty": "hard",
+        "notes": "Predates the WASIX approach and separates clang from lld explicitly, which avoids posix_spawn -- a useful reference if you ever want an in-protocol C compiler. Old and unmaintained."
+      },
       "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "" },
       "sources": ["https://github.com/binji/wasm-clang"]
     },
@@ -569,8 +822,15 @@
         "difficulty": "moderate",
         "notes": "The most interesting *shape* in the C world: a whole C compiler in a few hundred KB with a hand-written, auditable syscall shim -- exactly the kind of thing that could be a Scaffold contract. Blocked on codegen: TCC has no WebAssembly backend, so today it produces native code, not wasm. Adding one is a real but bounded project."
       },
-      "determinism": { "verdict": "ok", "blockers": [], "notes": "Freestanding build with an explicit, tiny import surface -- nothing the transformer objects to." },
-      "sources": ["https://github.com/lupyuen/tcc-riscv32-wasm", "https://lupyuen.codeberg.page/articles/tcc.html"]
+      "determinism": {
+        "verdict": "ok",
+        "blockers": [],
+        "notes": "Freestanding build with an explicit, tiny import surface -- nothing the transformer objects to."
+      },
+      "sources": [
+        "https://github.com/lupyuen/tcc-riscv32-wasm",
+        "https://lupyuen.codeberg.page/articles/tcc.html"
+      ]
     },
     {
       "id": "emscripten-cpp",
@@ -579,14 +839,32 @@
       "url": "https://emscripten.org/",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "emcc", "hostedInWasm": false, "howToGetWasm": "native-only", "hostBindings": "n/a", "sourceDelivery": "files", "outputForm": ".wasm (+ .js glue unless -sSTANDALONE_WASM)" },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "emscripten-js by default; wasi-p1-ish with -sSTANDALONE_WASM", "needsJsGlue": true },
+      "compiler": {
+        "artifact": "emcc",
+        "hostedInWasm": false,
+        "howToGetWasm": "native-only",
+        "hostBindings": "n/a",
+        "sourceDelivery": "files",
+        "outputForm": ".wasm (+ .js glue unless -sSTANDALONE_WASM)"
+      },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "emscripten-js by default; wasi-p1-ish with -sSTANDALONE_WASM",
+        "needsJsGlue": true
+      },
       "rebuildForScaffold": {
         "difficulty": "moderate",
         "notes": "Key operational fact for this whole survey: `-sSTANDALONE_WASM` (and plain `emcc -O3 x.c -o x.wasm`) emits a module that creates its own memory and uses WASI instead of JS glue -- but it is best-effort. If the program touches an API with no non-JS equivalent, JS glue comes back. Several projects have reported that STANDALONE_WASM/PURE_WASI are not fully honoured. Treat any 'just rebuild it standalone' plan as needing verification per project."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": ["exception-handling if -fexceptions", "simd if -msimd128"], "notes": "Build with exceptions and SIMD off." },
-      "sources": ["https://v8.dev/blog/emscripten-standalone-wasm", "https://github.com/emscripten-core/emscripten/issues/20484"]
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": ["exception-handling if -fexceptions", "simd if -msimd128"],
+        "notes": "Build with exceptions and SIMD off."
+      },
+      "sources": [
+        "https://v8.dev/blog/emscripten-standalone-wasm",
+        "https://github.com/emscripten-core/emscripten/issues/20484"
+      ]
     },
     {
       "id": "go-stdlib-wasip1",
@@ -595,13 +873,29 @@
       "url": "https://go.dev/wiki/WebAssembly",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "go build", "hostedInWasm": false, "howToGetWasm": "native-only", "hostBindings": "n/a", "sourceDelivery": "module tree", "outputForm": ".wasm (wasip1) or .wasm + wasm_exec.js (js/wasm)" },
-      "interpreter": { "artifact": "emitted module (contains the Go runtime + GC + scheduler)", "hostBindings": "wasi-p1 or custom (go js glue)", "approxSizeMB": 2, "needsJsGlue": false },
+      "compiler": {
+        "artifact": "go build",
+        "hostedInWasm": false,
+        "howToGetWasm": "native-only",
+        "hostBindings": "n/a",
+        "sourceDelivery": "module tree",
+        "outputForm": ".wasm (wasip1) or .wasm + wasm_exec.js (js/wasm)"
+      },
+      "interpreter": {
+        "artifact": "emitted module (contains the Go runtime + GC + scheduler)",
+        "hostBindings": "wasi-p1 or custom (go js glue)",
+        "approxSizeMB": 2,
+        "needsJsGlue": false
+      },
       "rebuildForScaffold": {
         "difficulty": "hard",
         "notes": "Every Go binary carries the runtime, GC and goroutine scheduler. The scheduler wants to yield to the host, which is why Go wasm modules are awkward under a call-in/call-out ABI. Multi-MB minimum output."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": ["scheduler/GC host interaction"], "notes": "The GC and map iteration order are the classic nondeterminism traps; Go randomizes map iteration deliberately." },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": ["scheduler/GC host interaction"],
+        "notes": "The GC and map iteration order are the classic nondeterminism traps; Go randomizes map iteration deliberately."
+      },
       "sources": ["https://go.dev/wiki/WebAssembly"]
     },
     {
@@ -611,14 +905,33 @@
       "url": "https://tinygo.org/docs/guides/webassembly/",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "tinygo build", "hostedInWasm": false, "howToGetWasm": "native-only", "hostBindings": "n/a", "sourceDelivery": "module tree", "outputForm": ".wasm targeting wasm-unknown, wasip1 or wasip2" },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "none (wasm-unknown) | wasi-p1 | wasi-p2", "approxSizeMB": 0.05, "needsJsGlue": false },
+      "compiler": {
+        "artifact": "tinygo build",
+        "hostedInWasm": false,
+        "howToGetWasm": "native-only",
+        "hostBindings": "n/a",
+        "sourceDelivery": "module tree",
+        "outputForm": ".wasm targeting wasm-unknown, wasip1 or wasip2"
+      },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "none (wasm-unknown) | wasi-p1 | wasi-p2",
+        "approxSizeMB": 0.05,
+        "needsJsGlue": false
+      },
       "rebuildForScaffold": {
         "difficulty": "easy",
         "notes": "The `wasm-unknown` target emits a module with essentially no imports, and //export lets you name exports directly -- a Scaffold contract in Go is straightforward. Cost: no reflection-heavy libraries, limited goroutine support, subset stdlib."
       },
-      "determinism": { "verdict": "ok", "blockers": [], "notes": "LLVM-based, scalar output with default flags; the conservative GC allocates from linear memory (watch memory.grow, which the transformer instruments)." },
-      "sources": ["https://tinygo.org/docs/guides/webassembly/", "https://github.com/tinygo-org/tinygo"]
+      "determinism": {
+        "verdict": "ok",
+        "blockers": [],
+        "notes": "LLVM-based, scalar output with default flags; the conservative GC allocates from linear memory (watch memory.grow, which the transformer instruments)."
+      },
+      "sources": [
+        "https://tinygo.org/docs/guides/webassembly/",
+        "https://github.com/tinygo-org/tinygo"
+      ]
     },
     {
       "id": "yaegi-wasi",
@@ -628,8 +941,18 @@
       "maturity": "experimental",
       "confidence": "reported",
       "compiler": null,
-      "interpreter": { "artifact": "yaegi.wasm", "howToGetWasm": "buildable", "hostBindings": "wasi-p1", "sourceDelivery": "Go source string", "approxSizeMB": 38, "needsJsGlue": false },
-      "rebuildForScaffold": { "difficulty": "hard", "notes": "Proves the concept -- a Go interpreter running as wasm, so Go source is data rather than a build input -- but 38MB and WASI's single-shot command model make it impractical here." },
+      "interpreter": {
+        "artifact": "yaegi.wasm",
+        "howToGetWasm": "buildable",
+        "hostBindings": "wasi-p1",
+        "sourceDelivery": "Go source string",
+        "approxSizeMB": 38,
+        "needsJsGlue": false
+      },
+      "rebuildForScaffold": {
+        "difficulty": "hard",
+        "notes": "Proves the concept -- a Go interpreter running as wasm, so Go source is data rather than a build input -- but 38MB and WASI's single-shot command model make it impractical here."
+      },
       "determinism": { "verdict": "needs-rebuild", "blockers": ["go runtime"], "notes": "" },
       "sources": ["https://blog.lvmbdv.dev/posts/adding-go-to-a-browser-code-runner/"]
     },
@@ -640,11 +963,33 @@
       "url": "https://internals.rust-lang.org/t/running-rustc-on-wasm/16198",
       "maturity": "not-available",
       "confidence": "documented",
-      "compiler": { "artifact": null, "hostedInWasm": false, "howToGetWasm": "plausible", "hostBindings": "n/a", "sourceDelivery": "n/a", "outputForm": "n/a", "notes": "Long-standing internals discussion, no shipping wasm-hosted rustc. Blockers: LLVM size, process spawning for the linker, and the filesystem-heavy driver. Rust->wasm output is of course completely mature (wasm32-unknown-unknown, wasm32-wasip1/p2)." },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "none | wasi-p1 | wasi-p2", "needsJsGlue": false },
-      "rebuildForScaffold": { "difficulty": "easy", "notes": "For *writing* Scaffold contracts, Rust is a first-class option: #[no_std] + wasm32-unknown-unknown + extern \"C\" imports gives you exactly the scaffold_env shape. For running Rust *as data*, there is nothing." },
-      "determinism": { "verdict": "ok", "blockers": [], "notes": "Disable SIMD-using dependencies; core/alloc are scalar." },
-      "sources": ["https://internals.rust-lang.org/t/running-rustc-on-wasm/16198", "https://rust-lang.org/what/wasm/"]
+      "compiler": {
+        "artifact": null,
+        "hostedInWasm": false,
+        "howToGetWasm": "plausible",
+        "hostBindings": "n/a",
+        "sourceDelivery": "n/a",
+        "outputForm": "n/a",
+        "notes": "Long-standing internals discussion, no shipping wasm-hosted rustc. Blockers: LLVM size, process spawning for the linker, and the filesystem-heavy driver. Rust->wasm output is of course completely mature (wasm32-unknown-unknown, wasm32-wasip1/p2)."
+      },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "none | wasi-p1 | wasi-p2",
+        "needsJsGlue": false
+      },
+      "rebuildForScaffold": {
+        "difficulty": "easy",
+        "notes": "For *writing* Scaffold contracts, Rust is a first-class option: #[no_std] + wasm32-unknown-unknown + extern \"C\" imports gives you exactly the scaffold_env shape. For running Rust *as data*, there is nothing."
+      },
+      "determinism": {
+        "verdict": "ok",
+        "blockers": [],
+        "notes": "Disable SIMD-using dependencies; core/alloc are scalar."
+      },
+      "sources": [
+        "https://internals.rust-lang.org/t/running-rustc-on-wasm/16198",
+        "https://rust-lang.org/what/wasm/"
+      ]
     },
     {
       "id": "cheerpj",
@@ -666,8 +1011,15 @@
         "difficulty": "hard",
         "notes": "Conceptually the purest 'interpreter takes source S as data' entry for a mainstream language -- you hand it a jar. But it is proprietary, browser-coupled, and enormous."
       },
-      "determinism": { "verdict": "likely-blocked", "blockers": ["jit-generated wasm", "host emulation layer"], "notes": "JIT-generating wasm at runtime is fundamentally at odds with a pre-validated deterministic module." },
-      "sources": ["https://labs.leaningtech.com/blog/cheerpj-4.0", "https://bytecode.news/posts/2026/04/cheerpj-4-3-webassembly-based-jvm-for-the-browser"]
+      "determinism": {
+        "verdict": "likely-blocked",
+        "blockers": ["jit-generated wasm", "host emulation layer"],
+        "notes": "JIT-generating wasm at runtime is fundamentally at odds with a pre-validated deterministic module."
+      },
+      "sources": [
+        "https://labs.leaningtech.com/blog/cheerpj-4.0",
+        "https://bytecode.news/posts/2026/04/cheerpj-4-3-webassembly-based-jvm-for-the-browser"
+      ]
     },
     {
       "id": "teavm",
@@ -676,11 +1028,28 @@
       "url": "https://teavm.org/",
       "maturity": "stable",
       "confidence": "reported",
-      "compiler": { "artifact": "TeaVM compiler (runs on the JVM)", "hostedInWasm": false, "howToGetWasm": "plausible", "hostBindings": "n/a", "sourceDelivery": "JVM bytecode", "outputForm": "WasmGC module (or JS)" },
-      "interpreter": { "artifact": "emitted WasmGC module", "hostBindings": "custom", "needsJsGlue": true },
+      "compiler": {
+        "artifact": "TeaVM compiler (runs on the JVM)",
+        "hostedInWasm": false,
+        "howToGetWasm": "plausible",
+        "hostBindings": "n/a",
+        "sourceDelivery": "JVM bytecode",
+        "outputForm": "WasmGC module (or JS)"
+      },
+      "interpreter": {
+        "artifact": "emitted WasmGC module",
+        "hostBindings": "custom",
+        "needsJsGlue": true
+      },
       "rebuildForScaffold": { "difficulty": "blocked", "notes": "Output is WasmGC." },
-      "determinism": { "verdict": "blocked", "blockers": ["wasmgc"], "notes": "The determinism transformer bans the entire 0xfb GC opcode family. The deeper objection is that delegating to the host GC moves the allocator out of the hashed module and into the engine, where it cannot be audited or version-pinned. See scripts/wasm-determinism/README.md." },
-      "sources": ["https://www.javacodegeeks.com/2026/04/webassembly-in-2026-where-it-has-landed-what-wasi-0-2-changes-and-why-java-and-kotlin-developers-should-pay-attention-now.html"]
+      "determinism": {
+        "verdict": "blocked",
+        "blockers": ["wasmgc"],
+        "notes": "The determinism transformer bans the entire 0xfb GC opcode family. The deeper objection is that delegating to the host GC moves the allocator out of the hashed module and into the engine, where it cannot be audited or version-pinned. See scripts/wasm-determinism/README.md."
+      },
+      "sources": [
+        "https://www.javacodegeeks.com/2026/04/webassembly-in-2026-where-it-has-landed-what-wasi-0-2-changes-and-why-java-and-kotlin-developers-should-pay-attention-now.html"
+      ]
     },
     {
       "id": "kotlin-wasm",
@@ -689,11 +1058,32 @@
       "url": "https://kotlinlang.org/docs/wasm-overview.html",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "Kotlin compiler (JVM-hosted)", "hostedInWasm": false, "howToGetWasm": "native-only", "hostBindings": "n/a", "sourceDelivery": "Kotlin sources", "outputForm": "WasmGC module (wasm-js) or wasm-wasi" },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "custom (wasm-js) | wasi-p1 (wasm-wasi)", "needsJsGlue": true },
-      "rebuildForScaffold": { "difficulty": "blocked", "notes": "WasmGC-only for the browser target." },
-      "determinism": { "verdict": "blocked", "blockers": ["wasmgc", "exception-handling"], "notes": "WasmGC has been baseline across Chrome 119 / Firefox 120 / Safari 18.2 since late 2024, and Wasm 3.0 standardized it in Sept 2025 -- so this is a Scaffold policy constraint, not a browser one." },
-      "sources": ["https://kotlinlang.org/docs/wasm-configuration.html", "https://blog.jetbrains.com/kotlin/2025/05/present-and-future-kotlin-for-web/"]
+      "compiler": {
+        "artifact": "Kotlin compiler (JVM-hosted)",
+        "hostedInWasm": false,
+        "howToGetWasm": "native-only",
+        "hostBindings": "n/a",
+        "sourceDelivery": "Kotlin sources",
+        "outputForm": "WasmGC module (wasm-js) or wasm-wasi"
+      },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "custom (wasm-js) | wasi-p1 (wasm-wasi)",
+        "needsJsGlue": true
+      },
+      "rebuildForScaffold": {
+        "difficulty": "blocked",
+        "notes": "WasmGC-only for the browser target."
+      },
+      "determinism": {
+        "verdict": "blocked",
+        "blockers": ["wasmgc", "exception-handling"],
+        "notes": "WasmGC has been baseline across Chrome 119 / Firefox 120 / Safari 18.2 since late 2024, and Wasm 3.0 standardized it in Sept 2025 -- so this is a Scaffold policy constraint, not a browser one."
+      },
+      "sources": [
+        "https://kotlinlang.org/docs/wasm-configuration.html",
+        "https://blog.jetbrains.com/kotlin/2025/05/present-and-future-kotlin-for-web/"
+      ]
     },
     {
       "id": "dart2wasm",
@@ -702,10 +1092,25 @@
       "url": "https://dart.dev/web/wasm",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "dart compile wasm", "hostedInWasm": false, "howToGetWasm": "native-only", "hostBindings": "n/a", "sourceDelivery": "Dart sources", "outputForm": "WasmGC module" },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "custom", "needsJsGlue": true },
+      "compiler": {
+        "artifact": "dart compile wasm",
+        "hostedInWasm": false,
+        "howToGetWasm": "native-only",
+        "hostBindings": "n/a",
+        "sourceDelivery": "Dart sources",
+        "outputForm": "WasmGC module"
+      },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "custom",
+        "needsJsGlue": true
+      },
       "rebuildForScaffold": { "difficulty": "blocked", "notes": "WasmGC only." },
-      "determinism": { "verdict": "blocked", "blockers": ["wasmgc"], "notes": "Production-recommended since Flutter 3.22." },
+      "determinism": {
+        "verdict": "blocked",
+        "blockers": ["wasmgc"],
+        "notes": "Production-recommended since Flutter 3.22."
+      },
       "sources": ["https://flutterstudio.dev/blog/flutter-wasm-web-performance.html"]
     },
     {
@@ -715,11 +1120,32 @@
       "url": "https://www.scala-js.org/doc/project/webassembly.html",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "Scala.js linker (JVM-hosted)", "hostedInWasm": false, "howToGetWasm": "native-only", "hostBindings": "n/a", "sourceDelivery": "Scala sources / SJSIR", "outputForm": "WasmGC + exception-handling module" },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "custom", "needsJsGlue": true },
-      "rebuildForScaffold": { "difficulty": "blocked", "notes": "Stable since Scala.js 1.22.0, but uses both banned feature families." },
-      "determinism": { "verdict": "blocked", "blockers": ["wasmgc", "exception-handling"], "notes": "" },
-      "sources": ["https://www.scala-js.org/doc/project/webassembly.html", "https://virtuslab.com/blog/scala/scala-to-web-assembly"]
+      "compiler": {
+        "artifact": "Scala.js linker (JVM-hosted)",
+        "hostedInWasm": false,
+        "howToGetWasm": "native-only",
+        "hostBindings": "n/a",
+        "sourceDelivery": "Scala sources / SJSIR",
+        "outputForm": "WasmGC + exception-handling module"
+      },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "custom",
+        "needsJsGlue": true
+      },
+      "rebuildForScaffold": {
+        "difficulty": "blocked",
+        "notes": "Stable since Scala.js 1.22.0, but uses both banned feature families."
+      },
+      "determinism": {
+        "verdict": "blocked",
+        "blockers": ["wasmgc", "exception-handling"],
+        "notes": ""
+      },
+      "sources": [
+        "https://www.scala-js.org/doc/project/webassembly.html",
+        "https://virtuslab.com/blog/scala/scala-to-web-assembly"
+      ]
     },
     {
       "id": "dotnet-wasm",
@@ -728,7 +1154,14 @@
       "url": "https://learn.microsoft.com/en-us/aspnet/core/blazor/webassembly-build-tools-and-aot",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "Roslyn (native/JVM-free but not wasm-hosted); optional AOT step compiles IL to wasm", "hostedInWasm": false, "howToGetWasm": "plausible", "hostBindings": "n/a", "sourceDelivery": "C# sources", "outputForm": "CIL assemblies (interpreted) or AOT wasm" },
+      "compiler": {
+        "artifact": "Roslyn (native/JVM-free but not wasm-hosted); optional AOT step compiles IL to wasm",
+        "hostedInWasm": false,
+        "howToGetWasm": "plausible",
+        "hostBindings": "n/a",
+        "sourceDelivery": "C# sources",
+        "outputForm": "CIL assemblies (interpreted) or AOT wasm"
+      },
       "interpreter": {
         "artifact": "dotnet.wasm (Mono runtime compiled to wasm; loads and interprets .NET assemblies)",
         "howToGetWasm": "prebuilt",
@@ -737,9 +1170,19 @@
         "needsJsGlue": true,
         "notes": "Genuine two-stage model: the wasm module is the runtime, the assemblies are the program. AOT mode instead compiles IL to wasm ahead of time for ~95% of native speed at much larger size."
       },
-      "rebuildForScaffold": { "difficulty": "hard", "notes": "Structurally attractive (ship IL, not wasm), practically Emscripten-bound and very large." },
-      "determinism": { "verdict": "likely-blocked", "blockers": ["exception-handling", "emscripten-js glue"], "notes": ".NET leans on exceptions pervasively." },
-      "sources": ["https://github.com/dotnet/runtime/blob/main/src/mono/wasm/features.md", "https://andrewlock.net/running-dotnet-in-the-browser-without-blazor/"]
+      "rebuildForScaffold": {
+        "difficulty": "hard",
+        "notes": "Structurally attractive (ship IL, not wasm), practically Emscripten-bound and very large."
+      },
+      "determinism": {
+        "verdict": "likely-blocked",
+        "blockers": ["exception-handling", "emscripten-js glue"],
+        "notes": ".NET leans on exceptions pervasively."
+      },
+      "sources": [
+        "https://github.com/dotnet/runtime/blob/main/src/mono/wasm/features.md",
+        "https://andrewlock.net/running-dotnet-in-the-browser-without-blazor/"
+      ]
     },
     {
       "id": "swiftwasm",
@@ -756,11 +1199,26 @@
         "sourceDelivery": "Swift package",
         "outputForm": "wasm32-unknown-wasip1 (or wasip1-threads) module"
       },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "wasi-p1", "needsJsGlue": false, "notes": "Embedded Swift mode produces much smaller binaries and is supported in the distributed SDK bundles." },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "wasi-p1",
+        "needsJsGlue": false,
+        "notes": "Embedded Swift mode produces much smaller binaries and is supported in the distributed SDK bundles."
+      },
       "statusNote": "Officially supported since Swift 6.2 (SDKs on swift.org); 6.3 SDKs shipping. WasmKit is a Swift-native wasm runtime that `swift run` can delegate to.",
-      "rebuildForScaffold": { "difficulty": "moderate", "notes": "Embedded Swift + wasm32 with a hand-written import table is plausible; ARC means no GC opcodes, which is a real advantage over the WasmGC languages here." },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "Standard Swift uses error handling that lowers to returns, not Wasm EH -- worth confirming per build." },
-      "sources": ["https://www.swift.org/documentation/articles/wasm-getting-started.html", "https://forums.swift.org/t/swift-for-wasm-july-2026-updates/88673"]
+      "rebuildForScaffold": {
+        "difficulty": "moderate",
+        "notes": "Embedded Swift + wasm32 with a hand-written import table is plausible; ARC means no GC opcodes, which is a real advantage over the WasmGC languages here."
+      },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "Standard Swift uses error handling that lowers to returns, not Wasm EH -- worth confirming per build."
+      },
+      "sources": [
+        "https://www.swift.org/documentation/articles/wasm-getting-started.html",
+        "https://forums.swift.org/t/swift-for-wasm-july-2026-updates/88673"
+      ]
     },
     {
       "id": "ghc-wasm",
@@ -769,11 +1227,30 @@
       "url": "https://ghc.gitlab.haskell.org/ghc/doc/users_guide/wasm.html",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "wasm32-wasi-ghc (native-hosted, from ghc-wasm-meta)", "hostedInWasm": false, "howToGetWasm": "plausible", "hostBindings": "n/a", "sourceDelivery": "Haskell sources", "outputForm": "self-contained wasm32-wasi module" },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "wasi-p1 (+ optional JavaScript FFI in browsers)", "needsJsGlue": false, "notes": "The JSFFI lets Haskell values reference JS values as first-class GC'd heap objects and lets one Haskell thread block on a JS promise without blocking the runtime." },
+      "compiler": {
+        "artifact": "wasm32-wasi-ghc (native-hosted, from ghc-wasm-meta)",
+        "hostedInWasm": false,
+        "howToGetWasm": "plausible",
+        "hostBindings": "n/a",
+        "sourceDelivery": "Haskell sources",
+        "outputForm": "self-contained wasm32-wasi module"
+      },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "wasi-p1 (+ optional JavaScript FFI in browsers)",
+        "needsJsGlue": false,
+        "notes": "The JSFFI lets Haskell values reference JS values as first-class GC'd heap objects and lets one Haskell thread block on a JS promise without blocking the runtime."
+      },
       "statusNote": "Supported from GHC 9.10 onward; documented in the official user's guide through 9.14/9.15.",
-      "rebuildForScaffold": { "difficulty": "moderate", "notes": "Emits real WASI p1 modules with GHC's own GC in linear memory (no WasmGC), which is exactly the right property. Modules are large and the RTS does its own memory management, so the memory.grow abstain guard matters." },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "GHC RTS is deterministic single-threaded; confirm no SIMD in the emitted primops." },
+      "rebuildForScaffold": {
+        "difficulty": "moderate",
+        "notes": "Emits real WASI p1 modules with GHC's own GC in linear memory (no WasmGC), which is exactly the right property. Modules are large and the RTS does its own memory management, so the memory.grow abstain guard matters."
+      },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "GHC RTS is deterministic single-threaded; confirm no SIMD in the emitted primops."
+      },
       "sources": ["https://ghc.gitlab.haskell.org/ghc/doc/users_guide/wasm.html"]
     },
     {
@@ -783,12 +1260,29 @@
       "url": "https://ocaml.org/tools/wasm-target",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "wasm_of_ocaml (consumes OCaml bytecode)", "hostedInWasm": false, "howToGetWasm": "plausible", "hostBindings": "n/a", "sourceDelivery": "OCaml bytecode (.cmo/.byte)", "outputForm": "WasmGC module" },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "custom", "needsJsGlue": true },
+      "compiler": {
+        "artifact": "wasm_of_ocaml (consumes OCaml bytecode)",
+        "hostedInWasm": false,
+        "howToGetWasm": "plausible",
+        "hostBindings": "n/a",
+        "sourceDelivery": "OCaml bytecode (.cmo/.byte)",
+        "outputForm": "WasmGC module"
+      },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "custom",
+        "needsJsGlue": true
+      },
       "statusNote": "First release Feb 2025; now the recommended OCaml wasm path, compatible with js_of_ocaml bindings and OCaml 5.",
-      "rebuildForScaffold": { "difficulty": "blocked", "notes": "WasmGC. js_of_ocaml (JS output) remains the alternative but is not wasm at all." },
+      "rebuildForScaffold": {
+        "difficulty": "blocked",
+        "notes": "WasmGC. js_of_ocaml (JS output) remains the alternative but is not wasm at all."
+      },
       "determinism": { "verdict": "blocked", "blockers": ["wasmgc"], "notes": "" },
-      "sources": ["https://ocaml.org/tools/wasm-target", "https://tarides.com/blog/2025-02-19-the-first-wasm-of-ocaml-release-is-out/"]
+      "sources": [
+        "https://ocaml.org/tools/wasm-target",
+        "https://tarides.com/blog/2025-02-19-the-first-wasm-of-ocaml-release-is-out/"
+      ]
     },
     {
       "id": "guile-hoot",
@@ -806,11 +1300,25 @@
         "outputForm": "Wasm 3.0 module (WasmGC + tail calls)",
         "notes": "Hoot ships its own assembler/linker in Scheme, so the compiler can itself be compiled to wasm and run in the browser -- a genuine compiler-in-wasm."
       },
-      "interpreter": { "artifact": "emitted WasmGC module", "hostBindings": "custom", "needsJsGlue": true },
+      "interpreter": {
+        "artifact": "emitted WasmGC module",
+        "hostBindings": "custom",
+        "needsJsGlue": true
+      },
       "statusNote": "0.9.0 released 2026; requires Safari 26+, Firefox 121+, Chrome 119+.",
-      "rebuildForScaffold": { "difficulty": "blocked", "notes": "Output requires WasmGC and tail calls." },
-      "determinism": { "verdict": "blocked", "blockers": ["wasmgc", "tail-calls"], "notes": "The compiler-in-wasm architecture is worth studying even though the output format is currently unusable here." },
-      "sources": ["https://spritely.institute/news/hoot-0-9-0-released.html", "https://codeberg.org/spritely/hoot"]
+      "rebuildForScaffold": {
+        "difficulty": "blocked",
+        "notes": "Output requires WasmGC and tail calls."
+      },
+      "determinism": {
+        "verdict": "blocked",
+        "blockers": ["wasmgc", "tail-calls"],
+        "notes": "The compiler-in-wasm architecture is worth studying even though the output format is currently unusable here."
+      },
+      "sources": [
+        "https://spritely.institute/news/hoot-0-9-0-released.html",
+        "https://codeberg.org/spritely/hoot"
+      ]
     },
     {
       "id": "popcorn-atomvm",
@@ -827,13 +1335,27 @@
         "sourceDelivery": "Elixir source",
         "outputForm": "BEAM bytecode (.beam), which AtomVM then runs"
       },
-      "interpreter": { "artifact": "AtomVM compiled to wasm", "howToGetWasm": "prebuilt", "hostBindings": "emscripten-js", "sourceDelivery": ".beam modules", "needsJsGlue": true, "notes": "The full BEAM was not feasible on wasm; AtomVM is a much smaller Erlang VM originally for microcontrollers." },
+      "interpreter": {
+        "artifact": "AtomVM compiled to wasm",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "emscripten-js",
+        "sourceDelivery": ".beam modules",
+        "needsJsGlue": true,
+        "notes": "The full BEAM was not feasible on wasm; AtomVM is a much smaller Erlang VM originally for microcontrollers."
+      },
       "rebuildForScaffold": {
         "difficulty": "moderate",
         "notes": "Clean two-stage model (bytecode as data, small VM as the module) and AtomVM is explicitly designed for restricted environments. Real limitation is that AtomVM implements only a subset of Erlang/Elixir with custom, limited standard libraries. Process isolation and message-passing map unusually well onto a consensus system."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": ["emscripten-js glue"], "notes": "Scheduler ordering must be pinned." },
-      "sources": ["https://github.com/software-mansion/popcorn/", "https://swmansion.com/blog/popcorn-bringing-elixir-to-the-browser-8993a58a00be/"]
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": ["emscripten-js glue"],
+        "notes": "Scheduler ordering must be pinned."
+      },
+      "sources": [
+        "https://github.com/software-mansion/popcorn/",
+        "https://swmansion.com/blog/popcorn-bringing-elixir-to-the-browser-8993a58a00be/"
+      ]
     },
     {
       "id": "gleam-wasm",
@@ -853,9 +1375,15 @@
         "notes": "Powers the official Gleam Playground and LiveCodes. Rust compiler, so the wasm build is a cargo target."
       },
       "interpreter": null,
-      "rebuildForScaffold": { "difficulty": "moderate", "notes": "Excellent example of 'ship your compiler as a wasm module' for a Rust-written compiler, but its output targets JS/BEAM, so it does not close the loop to a wasm interpreter." },
+      "rebuildForScaffold": {
+        "difficulty": "moderate",
+        "notes": "Excellent example of 'ship your compiler as a wasm module' for a Rust-written compiler, but its output targets JS/BEAM, so it does not close the loop to a wasm interpreter."
+      },
       "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "" },
-      "sources": ["https://gleam.run/news/gleam-v0.20-released/", "https://livecodes.io/docs/languages/gleam/"]
+      "sources": [
+        "https://gleam.run/news/gleam-v0.20-released/",
+        "https://livecodes.io/docs/languages/gleam/"
+      ]
     },
     {
       "id": "assemblyscript",
@@ -873,13 +1401,25 @@
         "outputForm": "wasm module (via Binaryen)",
         "needsJsGlue": true
       },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "none | custom", "needsJsGlue": false, "notes": "Emitted modules declare their own imports; you choose them." },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "none | custom",
+        "needsJsGlue": false,
+        "notes": "Emitted modules declare their own imports; you choose them."
+      },
       "rebuildForScaffold": {
         "difficulty": "easy",
         "notes": "Probably the shortest path to a working compiler-contract prototype: the compiler runs in the browser today, the language is TypeScript-shaped (which suits a TS codebase), output has a minimal runtime, and you declare the import table yourself so `scaffold_env` bindings are a one-liner. Caveat: AssemblyScript is not TypeScript -- no `any`, no closures over dynamic types, managed via its own linear-memory GC."
       },
-      "determinism": { "verdict": "ok", "blockers": [], "notes": "Emits scalar wasm by default; its runtime (incremental GC) lives in linear memory, no WasmGC opcodes." },
-      "sources": ["https://www.assemblyscript.org/compiler.html", "https://github.com/AssemblyScript/assemblyscript"]
+      "determinism": {
+        "verdict": "ok",
+        "blockers": [],
+        "notes": "Emits scalar wasm by default; its runtime (incremental GC) lives in linear memory, no WasmGC opcodes."
+      },
+      "sources": [
+        "https://www.assemblyscript.org/compiler.html",
+        "https://github.com/AssemblyScript/assemblyscript"
+      ]
     },
     {
       "id": "grain",
@@ -888,9 +1428,23 @@
       "url": "https://grain-lang.org/",
       "maturity": "beta",
       "confidence": "reported",
-      "compiler": { "artifact": "grain compiler (OCaml/Reason, distributed as a native binary or a JS bundle)", "hostedInWasm": false, "howToGetWasm": "plausible", "hostBindings": "n/a", "sourceDelivery": "Grain sources", "outputForm": "wasm module" },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "wasi-p1", "needsJsGlue": false },
-      "rebuildForScaffold": { "difficulty": "moderate", "notes": "Designed wasm-first (its runtime is in linear memory, no WasmGC), still pre-1.0. Active in 2026 (wit-bindgen work in April)." },
+      "compiler": {
+        "artifact": "grain compiler (OCaml/Reason, distributed as a native binary or a JS bundle)",
+        "hostedInWasm": false,
+        "howToGetWasm": "plausible",
+        "hostBindings": "n/a",
+        "sourceDelivery": "Grain sources",
+        "outputForm": "wasm module"
+      },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "wasi-p1",
+        "needsJsGlue": false
+      },
+      "rebuildForScaffold": {
+        "difficulty": "moderate",
+        "notes": "Designed wasm-first (its runtime is in linear memory, no WasmGC), still pre-1.0. Active in 2026 (wit-bindgen work in April)."
+      },
       "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "" },
       "sources": ["https://grain-lang.org/", "https://developer.fermyon.com/wasm-languages/grain"]
     },
@@ -901,11 +1455,34 @@
       "url": "https://www.moonbitlang.com/",
       "maturity": "beta",
       "confidence": "reported",
-      "compiler": { "artifact": "moonc (also runs in their container-free, offline-capable browser IDE)", "hostedInWasm": true, "howToGetWasm": "prebuilt", "hostBindings": "custom", "sourceDelivery": "MoonBit sources", "outputForm": "wasm (also JS and native)", "needsJsGlue": true },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "none | custom", "needsJsGlue": false, "notes": "Reported to produce smaller binaries than equivalent Rust or Go wasm, with sub-millisecond cold starts." },
-      "rebuildForScaffold": { "difficulty": "easy", "notes": "Wasm-native by design with a compiler that already runs in the browser -- structurally the closest thing to a purpose-built option. Downsides: beta, small ecosystem, and the toolchain's licensing/governance is not fully open in the way the others here are. Verify before betting on it." },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "Has a WasmGC output mode as well as a linear-memory one -- pick the latter." },
-      "sources": ["https://www.moonbitlang.com/blog/first-announce", "https://thenewstack.io/moonbit-wasm-optimized-language-creates-less-code-than-rust/"]
+      "compiler": {
+        "artifact": "moonc (also runs in their container-free, offline-capable browser IDE)",
+        "hostedInWasm": true,
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "custom",
+        "sourceDelivery": "MoonBit sources",
+        "outputForm": "wasm (also JS and native)",
+        "needsJsGlue": true
+      },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "none | custom",
+        "needsJsGlue": false,
+        "notes": "Reported to produce smaller binaries than equivalent Rust or Go wasm, with sub-millisecond cold starts."
+      },
+      "rebuildForScaffold": {
+        "difficulty": "easy",
+        "notes": "Wasm-native by design with a compiler that already runs in the browser -- structurally the closest thing to a purpose-built option. Downsides: beta, small ecosystem, and the toolchain's licensing/governance is not fully open in the way the others here are. Verify before betting on it."
+      },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "Has a WasmGC output mode as well as a linear-memory one -- pick the latter."
+      },
+      "sources": [
+        "https://www.moonbitlang.com/blog/first-announce",
+        "https://thenewstack.io/moonbit-wasm-optimized-language-creates-less-code-than-rust/"
+      ]
     },
     {
       "id": "motoko",
@@ -914,13 +1491,29 @@
       "url": "https://docs.internetcomputer.org/languages/motoko/",
       "maturity": "stable",
       "confidence": "reported",
-      "compiler": { "artifact": "moc (OCaml); a wasm build backs the Motoko Playground", "hostedInWasm": true, "howToGetWasm": "buildable", "hostBindings": "custom", "sourceDelivery": "Motoko sources", "outputForm": "wasm canister module", "needsJsGlue": true },
-      "interpreter": { "artifact": "emitted module", "hostBindings": "custom (IC system API)", "needsJsGlue": false },
+      "compiler": {
+        "artifact": "moc (OCaml); a wasm build backs the Motoko Playground",
+        "hostedInWasm": true,
+        "howToGetWasm": "buildable",
+        "hostBindings": "custom",
+        "sourceDelivery": "Motoko sources",
+        "outputForm": "wasm canister module",
+        "needsJsGlue": true
+      },
+      "interpreter": {
+        "artifact": "emitted module",
+        "hostBindings": "custom (IC system API)",
+        "needsJsGlue": false
+      },
       "rebuildForScaffold": {
         "difficulty": "moderate",
         "notes": "The only language here designed from scratch for deterministic replicated execution on a blockchain: orthogonal persistence, an actor model, and a system-API import table conceptually parallel to scaffold_env. Closest prior art for what Scaffold contracts want, even if you never use it."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "The IC already enforces determinism constraints similar to Scaffold's; its rules are worth reading alongside scripts/wasm-determinism." },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "The IC already enforces determinism constraints similar to Scaffold's; its rules are worth reading alongside scripts/wasm-determinism."
+      },
       "sources": ["https://docs.internetcomputer.org/languages/motoko/"]
     },
     {
@@ -939,7 +1532,15 @@
         "sourceDelivery": "SQL text",
         "outputForm": "a database file image (deterministic bytes for a fixed page size and insert order)"
       },
-      "interpreter": { "artifact": "sqlite3.wasm", "howToGetWasm": "prebuilt", "hostBindings": "emscripten-js", "sourceDelivery": "SQL query text + a database image", "approxSizeMB": 1.0, "needsJsGlue": true, "npm": "@sqlite.org/sqlite-wasm (3.53.x)" },
+      "interpreter": {
+        "artifact": "sqlite3.wasm",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "emscripten-js",
+        "sourceDelivery": "SQL query text + a database image",
+        "approxSizeMB": 1.0,
+        "needsJsGlue": true,
+        "npm": "@sqlite.org/sqlite-wasm (3.53.x)"
+      },
       "rebuildForScaffold": {
         "difficulty": "easy",
         "notes": "The single most promising non-general-purpose entry. SQLite is designed to be embedded with a pluggable VFS: implement a scaffold_env-backed VFS and an amalgamation build against wasm32-freestanding and you have a deterministic query contract. The official build's OPFS VFS is irrelevant here -- you would supply your own."
@@ -949,7 +1550,10 @@
         "blockers": [],
         "notes": "Plain scalar C, no EH, no SIMD, no GC. Real determinism work is at the SQL level, not the wasm level: pin the page size, disable random(), fix ROWID assignment and collations, and require ORDER BY (result ordering is otherwise unspecified)."
       },
-      "sources": ["https://sqlite.org/wasm", "https://www.npmjs.com/package/@sqlite.org/sqlite-wasm"]
+      "sources": [
+        "https://sqlite.org/wasm",
+        "https://www.npmjs.com/package/@sqlite.org/sqlite-wasm"
+      ]
     },
     {
       "id": "sql-js",
@@ -959,9 +1563,22 @@
       "maturity": "stable",
       "confidence": "documented",
       "compiler": null,
-      "interpreter": { "artifact": "sql-wasm.wasm", "howToGetWasm": "prebuilt", "hostBindings": "emscripten-js", "sourceDelivery": "SQL text + an in-memory database image", "needsJsGlue": true },
-      "rebuildForScaffold": { "difficulty": "easy", "notes": "The original (2012) SQLite-in-browser. Entirely in-memory, which is closer to Scaffold's model than the OPFS-backed official build. Superseded by the official build for most uses." },
-      "determinism": { "verdict": "ok", "blockers": [], "notes": "Same SQL-level caveats as sqlite-wasm." },
+      "interpreter": {
+        "artifact": "sql-wasm.wasm",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "emscripten-js",
+        "sourceDelivery": "SQL text + an in-memory database image",
+        "needsJsGlue": true
+      },
+      "rebuildForScaffold": {
+        "difficulty": "easy",
+        "notes": "The original (2012) SQLite-in-browser. Entirely in-memory, which is closer to Scaffold's model than the OPFS-backed official build. Superseded by the official build for most uses."
+      },
+      "determinism": {
+        "verdict": "ok",
+        "blockers": [],
+        "notes": "Same SQL-level caveats as sqlite-wasm."
+      },
       "sources": ["https://github.com/sql-js/sql.js"]
     },
     {
@@ -972,13 +1589,23 @@
       "maturity": "stable",
       "confidence": "reported",
       "compiler": null,
-      "interpreter": { "artifact": "wa-sqlite.wasm", "howToGetWasm": "prebuilt", "hostBindings": "emscripten-js", "sourceDelivery": "SQL text", "needsJsGlue": true, "notes": "Its value is the pluggable JS-implemented VFS layer -- the first OPFS-backed SQLite. VFS implementations are moving from Asyncify to JSPI." },
+      "interpreter": {
+        "artifact": "wa-sqlite.wasm",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "emscripten-js",
+        "sourceDelivery": "SQL text",
+        "needsJsGlue": true,
+        "notes": "Its value is the pluggable JS-implemented VFS layer -- the first OPFS-backed SQLite. VFS implementations are moving from Asyncify to JSPI."
+      },
       "rebuildForScaffold": {
         "difficulty": "easy",
         "notes": "The most useful reference in this dataset for the transport question: it demonstrates a JS-implemented VFS where every storage call can block, using Asyncify or JSPI -- structurally the same problem Scaffold's JspiTransport solves for blocking host calls."
       },
       "determinism": { "verdict": "ok", "blockers": [], "notes": "" },
-      "sources": ["https://github.com/rhashimoto/wa-sqlite", "https://powersync.com/blog/sqlite-persistence-on-the-web"]
+      "sources": [
+        "https://github.com/rhashimoto/wa-sqlite",
+        "https://powersync.com/blog/sqlite-persistence-on-the-web"
+      ]
     },
     {
       "id": "duckdb-wasm",
@@ -988,10 +1615,28 @@
       "maturity": "stable",
       "confidence": "documented",
       "compiler": null,
-      "interpreter": { "artifact": "duckdb.wasm (several builds: mvp, eh, coi)", "howToGetWasm": "prebuilt", "hostBindings": "emscripten-js", "sourceDelivery": "SQL text over Arrow/Parquet/CSV/JSON inputs", "approxSizeMB": 35, "needsJsGlue": true, "notes": "Based on DuckDB v1.5.4; tested in Chrome, Firefox, Safari and Node." },
-      "rebuildForScaffold": { "difficulty": "hard", "notes": "Analytical SQL in the browser is genuinely impressive, but the C++ codebase depends on exceptions, and the fast builds want SIMD and threads." },
-      "determinism": { "verdict": "likely-blocked", "blockers": ["exception-handling", "simd", "threads"], "notes": "The 'mvp' build drops EH/SIMD/threads and would be the only candidate; also large, and parallel aggregation ordering is a determinism hazard." },
-      "sources": ["https://github.com/duckdb/duckdb-wasm", "https://motherduck.com/blog/duckdb-wasm-in-browser/"]
+      "interpreter": {
+        "artifact": "duckdb.wasm (several builds: mvp, eh, coi)",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "emscripten-js",
+        "sourceDelivery": "SQL text over Arrow/Parquet/CSV/JSON inputs",
+        "approxSizeMB": 35,
+        "needsJsGlue": true,
+        "notes": "Based on DuckDB v1.5.4; tested in Chrome, Firefox, Safari and Node."
+      },
+      "rebuildForScaffold": {
+        "difficulty": "hard",
+        "notes": "Analytical SQL in the browser is genuinely impressive, but the C++ codebase depends on exceptions, and the fast builds want SIMD and threads."
+      },
+      "determinism": {
+        "verdict": "likely-blocked",
+        "blockers": ["exception-handling", "simd", "threads"],
+        "notes": "The 'mvp' build drops EH/SIMD/threads and would be the only candidate; also large, and parallel aggregation ordering is a determinism hazard."
+      },
+      "sources": [
+        "https://github.com/duckdb/duckdb-wasm",
+        "https://motherduck.com/blog/duckdb-wasm-in-browser/"
+      ]
     },
     {
       "id": "pglite",
@@ -1001,9 +1646,24 @@
       "maturity": "beta",
       "confidence": "documented",
       "compiler": null,
-      "interpreter": { "artifact": "postgres.wasm", "howToGetWasm": "prebuilt", "hostBindings": "emscripten-js", "sourceDelivery": "SQL text", "approxSizeMB": 3, "needsJsGlue": true, "notes": "Real Postgres compiled to wasm -- not a Linux VM emulation. Under 3MB gzipped, with dynamic extension loading (pgvector, PostGIS)." },
-      "rebuildForScaffold": { "difficulty": "hard", "notes": "Postgres assumes a process model, shared memory and a filesystem; PGlite single-threads it but still leans on the Emscripten FS. Pre-1.0 as of 2026." },
-      "determinism": { "verdict": "likely-blocked", "blockers": ["emscripten-js glue", "dynamic linking"], "notes": "" },
+      "interpreter": {
+        "artifact": "postgres.wasm",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "emscripten-js",
+        "sourceDelivery": "SQL text",
+        "approxSizeMB": 3,
+        "needsJsGlue": true,
+        "notes": "Real Postgres compiled to wasm -- not a Linux VM emulation. Under 3MB gzipped, with dynamic extension loading (pgvector, PostGIS)."
+      },
+      "rebuildForScaffold": {
+        "difficulty": "hard",
+        "notes": "Postgres assumes a process model, shared memory and a filesystem; PGlite single-threads it but still leans on the Emscripten FS. Pre-1.0 as of 2026."
+      },
+      "determinism": {
+        "verdict": "likely-blocked",
+        "blockers": ["emscripten-js glue", "dynamic linking"],
+        "notes": ""
+      },
       "sources": ["https://pglite.dev/", "https://github.com/electric-sql/pglite"]
     },
     {
@@ -1014,12 +1674,24 @@
       "maturity": "stable",
       "confidence": "documented",
       "compiler": null,
-      "interpreter": { "artifact": "wasm3.wasm (published on the Wasmer registry)", "howToGetWasm": "prebuilt", "hostBindings": "wasi-p1", "sourceDelivery": "a .wasm module + argv", "approxSizeMB": 0.3, "needsJsGlue": false, "notes": "Explicitly supports running WebAssembly on WebAssembly." },
+      "interpreter": {
+        "artifact": "wasm3.wasm (published on the Wasmer registry)",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "wasi-p1",
+        "sourceDelivery": "a .wasm module + argv",
+        "approxSizeMB": 0.3,
+        "needsJsGlue": false,
+        "notes": "Explicitly supports running WebAssembly on WebAssembly."
+      },
       "rebuildForScaffold": {
         "difficulty": "easy",
         "notes": "Nesting a wasm interpreter inside a Scaffold contract gives you metering, a smaller trusted feature set, and full control of trap semantics -- at a large constant-factor slowdown. Plain C, small, easy to retarget imports."
       },
-      "determinism": { "verdict": "ok", "blockers": [], "notes": "An interpreted inner engine is arguably *more* deterministic than the host engine: you define the float and trap semantics yourself instead of trusting V8/SpiderMonkey/JSC to agree." },
+      "determinism": {
+        "verdict": "ok",
+        "blockers": [],
+        "notes": "An interpreted inner engine is arguably *more* deterministic than the host engine: you define the float and trap semantics yourself instead of trusting V8/SpiderMonkey/JSC to agree."
+      },
       "sources": ["https://github.com/wasm3/wasm3", "https://wasmer.io/vshymanskyy/wasm3"]
     },
     {
@@ -1030,12 +1702,23 @@
       "maturity": "stable",
       "confidence": "documented",
       "compiler": null,
-      "interpreter": { "artifact": "wasmi built for wasm32", "howToGetWasm": "buildable", "hostBindings": "custom | wasi-p1", "sourceDelivery": "a .wasm module", "needsJsGlue": false, "notes": "Rust, focused on constrained/embedded targets, and explicitly documented as compilable to WebAssembly itself." },
+      "interpreter": {
+        "artifact": "wasmi built for wasm32",
+        "howToGetWasm": "buildable",
+        "hostBindings": "custom | wasi-p1",
+        "sourceDelivery": "a .wasm module",
+        "needsJsGlue": false,
+        "notes": "Rust, focused on constrained/embedded targets, and explicitly documented as compilable to WebAssembly itself."
+      },
       "rebuildForScaffold": {
         "difficulty": "easy",
         "notes": "The best candidate for a metered inner engine. Rust means retargeting the host interface is a trait impl. Wasmi's lineage is blockchain runtimes (it was the substrate/casper interpreter), so deterministic execution and fuel metering are first-class concerns rather than afterthoughts."
       },
-      "determinism": { "verdict": "ok", "blockers": [], "notes": "Designed for deterministic, metered execution." },
+      "determinism": {
+        "verdict": "ok",
+        "blockers": [],
+        "notes": "Designed for deterministic, metered execution."
+      },
       "sources": ["https://github.com/wasmi-labs/wasmi"]
     },
     {
@@ -1046,9 +1729,23 @@
       "maturity": "stable",
       "confidence": "documented",
       "compiler": null,
-      "interpreter": { "artifact": "v86.wasm + JS", "howToGetWasm": "prebuilt", "hostBindings": "custom", "sourceDelivery": "a disk image / ISO", "needsJsGlue": true, "notes": "x86 PC emulator that JITs x86 to wasm at runtime. Boots Linux, Windows 95/98/2000, FreeDOS." },
-      "rebuildForScaffold": { "difficulty": "blocked", "notes": "Generating wasm at runtime is incompatible with pre-validated deterministic modules. Listed as the 'universal' escape hatch: any language at all, at emulator speed." },
-      "determinism": { "verdict": "blocked", "blockers": ["runtime code generation", "device/timer emulation"], "notes": "A deterministic-replay-capable emulator is possible in principle -- v86 is not one out of the box." },
+      "interpreter": {
+        "artifact": "v86.wasm + JS",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "custom",
+        "sourceDelivery": "a disk image / ISO",
+        "needsJsGlue": true,
+        "notes": "x86 PC emulator that JITs x86 to wasm at runtime. Boots Linux, Windows 95/98/2000, FreeDOS."
+      },
+      "rebuildForScaffold": {
+        "difficulty": "blocked",
+        "notes": "Generating wasm at runtime is incompatible with pre-validated deterministic modules. Listed as the 'universal' escape hatch: any language at all, at emulator speed."
+      },
+      "determinism": {
+        "verdict": "blocked",
+        "blockers": ["runtime code generation", "device/timer emulation"],
+        "notes": "A deterministic-replay-capable emulator is possible in principle -- v86 is not one out of the box."
+      },
       "sources": ["https://github.com/copy/v86"]
     },
     {
@@ -1059,8 +1756,18 @@
       "maturity": "stable",
       "confidence": "documented",
       "compiler": null,
-      "interpreter": { "artifact": "CheerpX engine", "howToGetWasm": "prebuilt", "hostBindings": "custom", "sourceDelivery": "an x86 Linux filesystem image", "needsJsGlue": true, "notes": "Multi-tier: fast interpreter plus a JIT that generates optimized wasm on the fly. Substantially faster than v86." },
-      "rebuildForScaffold": { "difficulty": "blocked", "notes": "Same runtime-codegen problem, plus proprietary licensing." },
+      "interpreter": {
+        "artifact": "CheerpX engine",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "custom",
+        "sourceDelivery": "an x86 Linux filesystem image",
+        "needsJsGlue": true,
+        "notes": "Multi-tier: fast interpreter plus a JIT that generates optimized wasm on the fly. Substantially faster than v86."
+      },
+      "rebuildForScaffold": {
+        "difficulty": "blocked",
+        "notes": "Same runtime-codegen problem, plus proprietary licensing."
+      },
       "determinism": { "verdict": "blocked", "blockers": ["runtime code generation"], "notes": "" },
       "sources": ["https://labs.leaningtech.com/blog/cx-10"]
     },
@@ -1072,12 +1779,24 @@
       "maturity": "stable",
       "confidence": "reported",
       "compiler": null,
-      "interpreter": { "artifact": "blink.wasm (buildable; the project targets many hosts)", "howToGetWasm": "buildable", "hostBindings": "wasi-p1", "sourceDelivery": "a static x86-64 ELF binary", "approxSizeMB": 0.25, "needsJsGlue": false, "notes": "Supports 500+ instructions and 150+ Linux syscalls including fork/clone. Tiny compared to v86/CheerpX." },
+      "interpreter": {
+        "artifact": "blink.wasm (buildable; the project targets many hosts)",
+        "howToGetWasm": "buildable",
+        "hostBindings": "wasi-p1",
+        "sourceDelivery": "a static x86-64 ELF binary",
+        "approxSizeMB": 0.25,
+        "needsJsGlue": false,
+        "notes": "Supports 500+ instructions and 150+ Linux syscalls including fork/clone. Tiny compared to v86/CheerpX."
+      },
       "rebuildForScaffold": {
         "difficulty": "moderate",
         "notes": "Unlike v86 and CheerpX this is a pure interpreter with no runtime code generation, so it is not automatically disqualified. A ~250KB module that runs arbitrary static x86-64 binaries is a remarkable universal-runtime option -- at heavy interpretation cost, and with a large syscall surface you would need to cut down hard."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "Determinism hinges on which syscalls you expose; stub clock/random/fork." },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "Determinism hinges on which syscalls you expose; stub clock/random/fork."
+      },
       "sources": ["https://github.com/jart/blink"]
     },
     {
@@ -1087,11 +1806,25 @@
       "url": "https://www.npmjs.com/package/esbuild-wasm",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "esbuild.wasm (Go, GOOS=js)", "hostedInWasm": true, "howToGetWasm": "prebuilt", "hostBindings": "custom (go wasm_exec glue)", "sourceDelivery": "source strings via transform()/build()", "outputForm": "JavaScript", "needsJsGlue": true },
+      "compiler": {
+        "artifact": "esbuild.wasm (Go, GOOS=js)",
+        "hostedInWasm": true,
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "custom (go wasm_exec glue)",
+        "sourceDelivery": "source strings via transform()/build()",
+        "outputForm": "JavaScript",
+        "needsJsGlue": true
+      },
       "interpreter": null,
-      "rebuildForScaffold": { "difficulty": "hard", "notes": "Widely used for in-browser TS compilation, but it is Go-in-wasm with the Go scheduler glue, and its wasm build is reportedly slow -- slower than JS bundlers in web containers. Output is JS, not wasm." },
+      "rebuildForScaffold": {
+        "difficulty": "hard",
+        "notes": "Widely used for in-browser TS compilation, but it is Go-in-wasm with the Go scheduler glue, and its wasm build is reportedly slow -- slower than JS bundlers in web containers. Output is JS, not wasm."
+      },
       "determinism": { "verdict": "needs-rebuild", "blockers": ["go runtime glue"], "notes": "" },
-      "sources": ["https://www.npmjs.com/package/esbuild-wasm", "https://schof.co/running-esbuild-in-the-browser/"]
+      "sources": [
+        "https://www.npmjs.com/package/esbuild-wasm",
+        "https://schof.co/running-esbuild-in-the-browser/"
+      ]
     },
     {
       "id": "swc-wasm",
@@ -1100,9 +1833,20 @@
       "url": "https://swc.rs/",
       "maturity": "stable",
       "confidence": "reported",
-      "compiler": { "artifact": "@swc/wasm-web", "hostedInWasm": true, "howToGetWasm": "prebuilt", "hostBindings": "custom (wasm-bindgen)", "sourceDelivery": "source string", "outputForm": "JavaScript", "needsJsGlue": true },
+      "compiler": {
+        "artifact": "@swc/wasm-web",
+        "hostedInWasm": true,
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "custom (wasm-bindgen)",
+        "sourceDelivery": "source string",
+        "outputForm": "JavaScript",
+        "needsJsGlue": true
+      },
       "interpreter": null,
-      "rebuildForScaffold": { "difficulty": "moderate", "notes": "Rust, so retargeting is easier than esbuild's Go glue, but it still only produces JavaScript -- you would still need a JS interpreter module downstream." },
+      "rebuildForScaffold": {
+        "difficulty": "moderate",
+        "notes": "Rust, so retargeting is easier than esbuild's Go glue, but it still only produces JavaScript -- you would still need a JS interpreter module downstream."
+      },
       "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "" },
       "sources": ["https://swc.rs/"]
     },
@@ -1123,13 +1867,24 @@
         "needsJsGlue": true,
         "notes": "Every historical compiler version is published as a wasm build; this is what Remix runs. Usually driven from a web worker."
       },
-      "interpreter": { "artifact": "an EVM implementation -- see the evm-wasm entry", "hostBindings": "custom", "needsJsGlue": false },
+      "interpreter": {
+        "artifact": "an EVM implementation -- see the evm-wasm entry",
+        "hostBindings": "custom",
+        "needsJsGlue": false
+      },
       "rebuildForScaffold": {
         "difficulty": "moderate",
         "notes": "The best-established real-world instance of the exact pattern in question: a versioned, content-addressed compiler shipped as a wasm module, producing bytecode for a separately-deployed deterministic interpreter. Worth reading closely for how they handle compiler-version pinning and reproducible output."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": ["emscripten-js glue"], "notes": "Compiler output is reproducible by design -- solc is bit-for-bit deterministic per version, which is a hard requirement Ethereum already solved." },
-      "sources": ["https://docs.soliditylang.org/en/latest/installing-solidity.html", "https://github.com/ethereum/solc-js"]
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": ["emscripten-js glue"],
+        "notes": "Compiler output is reproducible by design -- solc is bit-for-bit deterministic per version, which is a hard requirement Ethereum already solved."
+      },
+      "sources": [
+        "https://docs.soliditylang.org/en/latest/installing-solidity.html",
+        "https://github.com/ethereum/solc-js"
+      ]
     },
     {
       "id": "evm-wasm",
@@ -1139,13 +1894,26 @@
       "maturity": "stable",
       "confidence": "reported",
       "compiler": null,
-      "interpreter": { "artifact": "revm built for wasm32 (yevm is a newer async-first Rust EVM with an in-browser simulation layer)", "howToGetWasm": "buildable", "hostBindings": "custom", "sourceDelivery": "EVM bytecode + calldata + state", "needsJsGlue": true },
+      "interpreter": {
+        "artifact": "revm built for wasm32 (yevm is a newer async-first Rust EVM with an in-browser simulation layer)",
+        "howToGetWasm": "buildable",
+        "hostBindings": "custom",
+        "sourceDelivery": "EVM bytecode + calldata + state",
+        "needsJsGlue": true
+      },
       "rebuildForScaffold": {
         "difficulty": "easy",
         "notes": "An EVM is a deterministic, metered, state-transition interpreter -- the closest existing analogue to what a Scaffold execution contract is. Rust, so retargeting the state/host interface onto scaffold_env is a trait impl. Even if you never ship it, it is the most direct A/B comparison for the whole design."
       },
-      "determinism": { "verdict": "ok", "blockers": [], "notes": "Determinism is the entire point of the EVM spec; gas metering solves the halting problem the same way you will need to." },
-      "sources": ["https://github.com/bluealloy/revm", "https://sergey-melnychuk.github.io/2026/05/23/yevm/"]
+      "determinism": {
+        "verdict": "ok",
+        "blockers": [],
+        "notes": "Determinism is the entire point of the EVM spec; gas metering solves the halting problem the same way you will need to."
+      },
+      "sources": [
+        "https://github.com/bluealloy/revm",
+        "https://sergey-melnychuk.github.io/2026/05/23/yevm/"
+      ]
     },
     {
       "id": "wizer",
@@ -1168,8 +1936,15 @@
         "difficulty": "moderate",
         "notes": "If you want compiler-as-contract for ANY interpreter without writing a compiler, this is the trick: interpreter.wasm + source -> a content-addressed module that is itself a Scaffold contract. Javy and ComponentizeJS both use it. Snapshot output must be byte-deterministic for a given input, which Wizer aims for but you must verify."
       },
-      "determinism": { "verdict": "ok", "blockers": [], "notes": "Determinism of the snapshot depends entirely on the init function being deterministic -- no clock, no random, no address-dependent hashing." },
-      "sources": ["https://github.com/bytecodealliance/wizer", "https://bytecodealliance.org/articles/making-javascript-run-fast-on-webassembly"]
+      "determinism": {
+        "verdict": "ok",
+        "blockers": [],
+        "notes": "Determinism of the snapshot depends entirely on the init function being deterministic -- no clock, no random, no address-dependent hashing."
+      },
+      "sources": [
+        "https://github.com/bytecodealliance/wizer",
+        "https://bytecodealliance.org/articles/making-javascript-run-fast-on-webassembly"
+      ]
     },
     {
       "id": "binaryen-wabt-wasm",
@@ -1178,13 +1953,25 @@
       "url": "https://github.com/WebAssembly/binaryen",
       "maturity": "stable",
       "confidence": "documented",
-      "compiler": { "artifact": "wasm-opt / wat2wasm compiled via Emscripten (binaryen.js, wabt.js)", "hostedInWasm": true, "howToGetWasm": "prebuilt", "hostBindings": "emscripten-js", "sourceDelivery": ".wat text or .wasm bytes", "outputForm": ".wasm bytes", "needsJsGlue": true },
+      "compiler": {
+        "artifact": "wasm-opt / wat2wasm compiled via Emscripten (binaryen.js, wabt.js)",
+        "hostedInWasm": true,
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "emscripten-js",
+        "sourceDelivery": ".wat text or .wasm bytes",
+        "outputForm": ".wasm bytes",
+        "needsJsGlue": true
+      },
       "interpreter": null,
       "rebuildForScaffold": {
         "difficulty": "moderate",
         "notes": "Needed if any compiler-contract wants to optimize or assemble its output in-protocol. Note the split: WABT round-trips faithfully with no instruction changes (good for verifiable transforms), Binaryen optimizes (good for size, but every optimization must be deterministic and version-pinned to stay verifiable). Scaffold's own determinism transformer already does raw binary rewriting in Zig, so a third-party dependency may not be wanted here."
       },
-      "determinism": { "verdict": "needs-rebuild", "blockers": ["emscripten-js glue"], "notes": "wasm-opt output must be pinned by version -- optimization results change between releases." },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": ["emscripten-js glue"],
+        "notes": "wasm-opt output must be pinned by version -- optimization results change between releases."
+      },
       "sources": ["https://github.com/WebAssembly/binaryen", "https://github.com/WebAssembly/wabt"]
     },
     {
@@ -1195,9 +1982,22 @@
       "maturity": "beta",
       "confidence": "uncertain",
       "compiler": null,
-      "interpreter": { "artifact": "bash.wasm and friends", "howToGetWasm": "prebuilt", "hostBindings": "wasix", "sourceDelivery": "script file on a mounted filesystem", "needsJsGlue": true },
-      "rebuildForScaffold": { "difficulty": "blocked", "notes": "A shell's whole purpose is spawning processes and touching the filesystem. Listed for completeness; not a candidate." },
-      "determinism": { "verdict": "blocked", "blockers": ["wasix host surface", "posix_spawn", "threads"], "notes": "" },
+      "interpreter": {
+        "artifact": "bash.wasm and friends",
+        "howToGetWasm": "prebuilt",
+        "hostBindings": "wasix",
+        "sourceDelivery": "script file on a mounted filesystem",
+        "needsJsGlue": true
+      },
+      "rebuildForScaffold": {
+        "difficulty": "blocked",
+        "notes": "A shell's whole purpose is spawning processes and touching the filesystem. Listed for completeness; not a candidate."
+      },
+      "determinism": {
+        "verdict": "blocked",
+        "blockers": ["wasix host surface", "posix_spawn", "threads"],
+        "notes": ""
+      },
       "sources": ["https://docs.wasmer.io/registry/"]
     },
     {
@@ -1207,19 +2007,51 @@
       "url": "https://gnucobol.sourceforge.io/",
       "maturity": "experimental",
       "confidence": "uncertain",
-      "compiler": { "artifact": "cobc (transpiles COBOL to C, then C to wasm)", "hostedInWasm": false, "howToGetWasm": "plausible", "hostBindings": "n/a", "sourceDelivery": "COBOL sources", "outputForm": "C, then wasm via clang/emscripten" },
-      "interpreter": { "artifact": "emitted module + libcob", "hostBindings": "wasi-p1", "needsJsGlue": false },
-      "rebuildForScaffold": { "difficulty": "hard", "notes": "Akamai's language matrix lists COBOL as CLI-yes, browser/WASI in-progress. Included for coverage; low confidence in current state." },
-      "determinism": { "verdict": "needs-rebuild", "blockers": [], "notes": "COBOL's fixed-point decimal arithmetic is actually a determinism advantage over float languages." },
-      "sources": ["https://techdocs.akamai.com/akamai-functions/docs/webassembly-language-support-matrix"]
+      "compiler": {
+        "artifact": "cobc (transpiles COBOL to C, then C to wasm)",
+        "hostedInWasm": false,
+        "howToGetWasm": "plausible",
+        "hostBindings": "n/a",
+        "sourceDelivery": "COBOL sources",
+        "outputForm": "C, then wasm via clang/emscripten"
+      },
+      "interpreter": {
+        "artifact": "emitted module + libcob",
+        "hostBindings": "wasi-p1",
+        "needsJsGlue": false
+      },
+      "rebuildForScaffold": {
+        "difficulty": "hard",
+        "notes": "Akamai's language matrix lists COBOL as CLI-yes, browser/WASI in-progress. Included for coverage; low confidence in current state."
+      },
+      "determinism": {
+        "verdict": "needs-rebuild",
+        "blockers": [],
+        "notes": "COBOL's fixed-point decimal arithmetic is actually a determinism advantage over float languages."
+      },
+      "sources": [
+        "https://techdocs.akamai.com/akamai-functions/docs/webassembly-language-support-matrix"
+      ]
     }
   ],
   "notAvailable": [
-    { "language": "Rust", "reason": "No wasm-hosted rustc. LLVM size, linker process spawning, and a filesystem-heavy driver. Rust->wasm output is fully mature." },
-    { "language": "C++ (full)", "reason": "Available only through the ~100MB clang/WASIX package or an x86 emulator. No small C++ compiler in wasm exists." },
-    { "language": "Go (official toolchain)", "reason": "The gc compiler has never been built for wasm; TinyGo's is LLVM-based and also native-only. Yaegi-in-wasip1 (38MB) is the only in-wasm Go execution path." },
+    {
+      "language": "Rust",
+      "reason": "No wasm-hosted rustc. LLVM size, linker process spawning, and a filesystem-heavy driver. Rust->wasm output is fully mature."
+    },
+    {
+      "language": "C++ (full)",
+      "reason": "Available only through the ~100MB clang/WASIX package or an x86 emulator. No small C++ compiler in wasm exists."
+    },
+    {
+      "language": "Go (official toolchain)",
+      "reason": "The gc compiler has never been built for wasm; TinyGo's is LLVM-based and also native-only. Yaegi-in-wasip1 (38MB) is the only in-wasm Go execution path."
+    },
     { "language": "PowerShell", "reason": "No WebAssembly support at all." },
-    { "language": "Julia", "reason": "Listed by aggregators but no maintained browser story; the runtime depends on LLVM JIT." }
+    {
+      "language": "Julia",
+      "reason": "Listed by aggregators but no maintained browser story; the runtime depends on LLVM JIT."
+    }
   ],
   "crossCuttingNotes": {
     "wasmGcIsTheDividingLine": "The languages that got best-in-class wasm support in 2024-2026 (Kotlin, Dart, Scala, OCaml, Java-via-TeaVM, Scheme-via-Hoot) all did it via WasmGC, which Scaffold's determinism transformer bans outright. This is the single largest constraint on the usable set. The ban is liftable: WasmGC exposes no addresses, no reference-to-integer conversion, no byte view of a struct, and no finalizers/weak refs/heap introspection (all deferred post-MVP), so the classic GC nondeterminism sources are absent by construction. What remains is resource exhaustion -- allocation failure (no OOM semantics in the spec) and engine-specific static limits that diverge at validation time. Lifting it requires pre-emptive allocation metering against a protocol cost model, which needs the same type-aware pass as re-enabling integer SIMD. Rationale and the argument against are recorded in scripts/wasm-determinism/README.md. All `blocked`/`likely-blocked` verdicts in this file reflect the rules as they stand today.",

@@ -1,3 +1,4 @@
+import { Logger } from '../interfaces/LoggingProvider.ts';
 import { assert } from './functional.ts';
 
 export const arrRemove = <T>(arr: T[], value: T) => {
@@ -6,17 +7,18 @@ export const arrRemove = <T>(arr: T[], value: T) => {
   arr.splice(idx, 1);
 };
 
+// A throwing listener must not stop the fan-out or fail the notifying call,
+// so pass a logger wherever one is in reach -- otherwise the throw is lost.
 export const arrCall = <Args extends unknown[]>(
   arr: Iterable<(...args: Args) => void>,
-  ...args: Args
+  args: Args,
+  log?: Logger,
 ) => {
   for (const cb of arr) {
     try {
       cb(...args);
     } catch (err) {
-      // Subscriber error must not affect other subscribers or the append
-      // TODO: Better error handling (maybe pass in a logger instance)
-      console.error(err);
+      log?.error('listenerFailed', { err });
     }
   }
 };

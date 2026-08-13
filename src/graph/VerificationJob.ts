@@ -26,7 +26,10 @@ export class VerificationJob implements Job {
       this.onValidity(isValid);
     } catch (err) {
       if (!(err instanceof CancelError)) {
-        console.error(err);
+        this.ctx.logger('verification')?.error('verifyFailed', {
+          block: this.block.hash.toHex(),
+          err,
+        });
       }
     }
   }

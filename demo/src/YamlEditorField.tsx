@@ -44,7 +44,7 @@ export const YamlEditorField = ({
   return (
     <MonacoEditor
       height={height}
-      language="yaml"
+      language='yaml'
       value={value}
       options={{
         readOnly,

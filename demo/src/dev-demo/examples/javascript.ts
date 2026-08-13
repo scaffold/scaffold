@@ -1,4 +1,4 @@
-import type { Example } from "./index.ts";
+import type { Example } from './index.ts';
 
 export const javascript: Example = {
   source: `// Optional; only used when params are passed as an object
@@ -13,6 +13,6 @@ function run() {
   scaffold.setData("response", "Hello " + scaffold.getParams());
 }
 `,
-  fetchParams: { kind: "bytes", text: "World" },
-  expectedOutput: "Hello World",
+  fetchParams: { kind: 'bytes', text: 'World' },
+  expectedOutput: 'Hello World',
 };

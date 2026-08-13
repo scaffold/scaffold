@@ -1555,8 +1555,12 @@
   animation: explorer-overlay-fade 0.15s ease-out;
 }
 @keyframes explorer-overlay-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .explorer-overlay-panel {
@@ -1571,8 +1575,14 @@
   animation: explorer-overlay-slide 0.18s ease-out;
   overflow: hidden;
 }
-.explorer-overlay-panel-right { right: 0; border-left: 1px solid #d2d2d7; }
-.explorer-overlay-panel-left { left: 0; border-right: 1px solid #d2d2d7; }
+.explorer-overlay-panel-right {
+  right: 0;
+  border-left: 1px solid #d2d2d7;
+}
+.explorer-overlay-panel-left {
+  left: 0;
+  border-right: 1px solid #d2d2d7;
+}
 
 .explorer-overlay-panel-fullscreen {
   left: 0;
@@ -1582,16 +1592,28 @@
 }
 
 @keyframes explorer-overlay-slide {
-  from { transform: translateX(8px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 .explorer-overlay-panel-left {
   animation-name: explorer-overlay-slide-left;
 }
 @keyframes explorer-overlay-slide-left {
-  from { transform: translateX(-8px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(-8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 .explorer-overlay-resize {
@@ -1608,8 +1630,12 @@
 .explorer-overlay-resize:active {
   background: rgba(0, 113, 227, 0.18);
 }
-.explorer-overlay-resize-right { left: 0; }
-.explorer-overlay-resize-left { right: 0; }
+.explorer-overlay-resize-right {
+  left: 0;
+}
+.explorer-overlay-resize-left {
+  right: 0;
+}
 
 /* Header */
 

@@ -265,6 +265,14 @@ Deno.test('jsonSafeStringify: an object with a `hash` field is reduced to that h
   assertEquals(jsonSafeStringify({ hash: h, dropped: 1 }), `{"hash":"${h.toHex()}"}`);
 });
 
+Deno.test('jsonSafeStringify: a Uint8Array becomes its hex', () => {
+  assertEquals(jsonSafeStringify({ b: new Uint8Array([0x4a, 0x6f]) }), '{"b":"4a6f"}');
+});
+
+Deno.test('jsonSafeStringify: an empty Uint8Array becomes an empty string', () => {
+  assertEquals(jsonSafeStringify({ b: new Uint8Array() }), '{"b":""}');
+});
+
 Deno.test('jsonSafeStringify: circular references become [circular]', () => {
   const a: Record<string, unknown> = { name: 'a' };
   a.self = a;

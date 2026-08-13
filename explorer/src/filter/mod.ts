@@ -1,7 +1,7 @@
 /**
  * Block filter module -- re-exports parser, evaluator, and ghost computation.
  */
-export { parseDuration, parseQuery } from "./parse.ts";
+export { parseDuration, parseQuery } from './parse.ts';
 export type {
   BooleanPredicate,
   ComparisonOp,
@@ -11,15 +11,10 @@ export type {
   Predicate,
   Query,
   Term,
-} from "./parse.ts";
+} from './parse.ts';
 
-export {
-  compareValues,
-  evaluatePredicate,
-  evaluateQuery,
-  evaluateTerm,
-} from "./evaluate.ts";
-export type { BlockInfo } from "./evaluate.ts";
+export { compareValues, evaluatePredicate, evaluateQuery, evaluateTerm } from './evaluate.ts';
+export type { BlockInfo } from './evaluate.ts';
 
-export { computeGhostHashes } from "./ghost.ts";
-export type { BlockEdges } from "./ghost.ts";
+export { computeGhostHashes } from './ghost.ts';
+export type { BlockEdges } from './ghost.ts';

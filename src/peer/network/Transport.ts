@@ -1,6 +1,6 @@
 import { TimeProvider } from '../../Config.ts';
 import { Context } from '../../Context.ts';
-import { ScopedLogger } from '../../logic/EventLog.ts';
+import { ScopedLogger } from '../../logic/Logger.ts';
 import { arrCall } from '../../util/array.ts';
 import { assert } from '../../util/functional.ts';
 import { TransportBase } from './TransportBase.ts';
@@ -43,15 +43,15 @@ export class Transport extends TransportBase implements AsyncDisposable {
   }
 
   protected override onConnectionReady(conn: Connection): void {
-    arrCall(this.connectionListeners, conn);
+    arrCall(this.connectionListeners, [conn], this.getLogger());
   }
 
   protected override onConnectionData(conn: Connection, data: Uint8Array): void {
-    arrCall(this.dataListeners, conn, data);
+    arrCall(this.dataListeners, [conn, data], this.getLogger());
   }
 
   protected override onConnectionClosed(conn: Connection): void {
-    arrCall(this.closedListeners, conn);
+    arrCall(this.closedListeners, [conn], this.getLogger());
   }
 
   protected override getLogger(): ScopedLogger | undefined {

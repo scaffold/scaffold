@@ -62,10 +62,12 @@ async function downloadWithCurl(url: string): Promise<Uint8Array> {
 
 async function main(): Promise<void> {
   if (await alreadyVendored()) {
+    // deno-lint-ignore no-console
     console.log(`vendor:quickjs: ${DEST_PATH} already present (sha256 OK).`);
     return;
   }
 
+  // deno-lint-ignore no-console
   console.log(`vendor:quickjs: fetching ${QUICKJS_URL}`);
   const bytes = await downloadWithCurl(QUICKJS_URL);
 
@@ -83,6 +85,7 @@ async function main(): Promise<void> {
 
   await Deno.mkdir(DEST_DIR, { recursive: true });
   await Deno.writeFile(DEST_PATH, bytes);
+  // deno-lint-ignore no-console
   console.log(`vendor:quickjs: wrote ${DEST_PATH} (${bytes.length} bytes, sha256 OK).`);
 }
 

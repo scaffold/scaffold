@@ -2,16 +2,13 @@
 // localStorage. Each entry is identified by the hex digest of its private
 // key bytes -- the same id surfaces in the URL `?key=<hex>` deep-link.
 
-import { Hash } from "scaffold.io/util/Hash.ts";
-import { bin2hex, hex2bin } from "scaffold.io/util/hex.ts";
-import { secp } from "scaffold.io/util/secp.ts";
-import {
-  WELL_KNOWN_KEYS,
-  WELL_KNOWN_PRIVATE_KEY,
-} from "scaffold.io/genesis.ts";
+import { Hash } from 'scaffold.io/util/Hash.ts';
+import { bin2hex, hex2bin } from 'scaffold.io/util/hex.ts';
+import { secp } from 'scaffold.io/util/secp.ts';
+import { WELL_KNOWN_KEYS, WELL_KNOWN_PRIVATE_KEY } from 'scaffold.io/genesis.ts';
 
-const STORAGE_KEY = "scaffold-demo-keystore-v1";
-const SELECTED_KEY_STORAGE = "scaffold-demo-selected-key-v1";
+const STORAGE_KEY = 'scaffold-demo-keystore-v1';
+const SELECTED_KEY_STORAGE = 'scaffold-demo-selected-key-v1';
 
 export interface KeyEntry {
   /** Hash hex of the private key bytes -- stable id across sessions. */
@@ -142,10 +139,10 @@ export function importKey(
   try {
     pk = hex2bin(trimmed);
   } catch {
-    throw new Error("Private key must be hex-encoded");
+    throw new Error('Private key must be hex-encoded');
   }
   if (pk.length !== 32) {
-    throw new Error("Private key must be 32 bytes");
+    throw new Error('Private key must be 32 bytes');
   }
   const id = hashOf(pk);
   if (existing.some((e) => e.id === id)) {
@@ -212,7 +209,7 @@ export function getOrCreateDefaultKeyId(): string {
   const keys = loadKeys();
   const existingUserKey = keys.find((k) => !k.builtIn);
   if (existingUserKey) return existingUserKey.id;
-  const { newId } = addRandomKey(keys, "Anonymous");
+  const { newId } = addRandomKey(keys, 'Anonymous');
   return newId;
 }
 

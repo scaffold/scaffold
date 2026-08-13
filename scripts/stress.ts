@@ -32,6 +32,7 @@ const cb = () => {
   ctx.get(BlockBuilder).publishSingleDraft({});
   count++;
   const duration = Date.now() - start;
+  // deno-lint-ignore no-console
   console.log(
     `Published ${count} blocks in ${duration / 1000} seconds (${
       Math.round(count / duration * 1000)

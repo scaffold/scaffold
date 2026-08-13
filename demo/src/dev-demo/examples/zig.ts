@@ -1,4 +1,4 @@
-import type { Example } from "./index.ts";
+import type { Example } from './index.ts';
 
 export const zig: Example = {
   source: `const scaffold = @import("scaffold");
@@ -17,6 +17,6 @@ pub fn run() void {
     scaffold.setData("response", greeting);
 }
 `,
-  fetchParams: { kind: "bytes", text: "World" },
-  expectedOutput: "Hello World",
+  fetchParams: { kind: 'bytes', text: 'World' },
+  expectedOutput: 'Hello World',
 };

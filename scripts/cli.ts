@@ -79,7 +79,7 @@ const cli = new ScaffoldCLI({
     process.stdout.write(data);
   },
   stderr: (line) => {
-    process.stderr.write(line + '\n');
+    process.stderr.write(line);
   },
   env: (name) => process.env[name],
   // TODO(@joel): inject the real package version at build time instead of

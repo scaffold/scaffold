@@ -1,19 +1,15 @@
-import React, { useCallback, useReducer } from "react";
-import type { ReactNode } from "react";
-import type { Scaffold } from "scaffold.io/Scaffold.ts";
-import { Hash } from "scaffold.io/util/Hash.ts";
-import type { Output } from "scaffold.io/core/BlockCreationModule.ts";
-import { RecordingReader } from "scaffold.io/core/RecordingReader.ts";
-import {
-  getContract,
-  getContractName,
-  getWellKnownContracts,
-} from "../contracts.ts";
+import React, { useCallback, useReducer } from 'react';
+import type { ReactNode } from 'react';
+import type { Scaffold } from 'scaffold.io/Scaffold.ts';
+import { Hash } from 'scaffold.io/util/Hash.ts';
+import type { Output } from 'scaffold.io/core/BlockCreationModule.ts';
+import { RecordingReader } from 'scaffold.io/core/RecordingReader.ts';
+import { getContract, getContractName, getWellKnownContracts } from '../contracts.ts';
 import {
   descriptorToJsonSchema,
   fieldsToDefaultObject,
   yamlToBuilderValues,
-} from "../schemaFromDescriptors.ts";
+} from '../schemaFromDescriptors.ts';
 
 // -- Public types -----------------------------------------------------------
 
@@ -67,11 +63,11 @@ interface ModalState {
 // -- Reducer ----------------------------------------------------------------
 
 type ModalAction =
-  | { type: "ADD_OUTPUT" }
-  | { type: "REMOVE_OUTPUT"; id: string }
-  | { type: "UPDATE_OUTPUT"; id: string; patch: Partial<OutputEntry> }
+  | { type: 'ADD_OUTPUT' }
+  | { type: 'REMOVE_OUTPUT'; id: string }
+  | { type: 'UPDATE_OUTPUT'; id: string; patch: Partial<OutputEntry> }
   | {
-    type: "SET_CONTRACT";
+    type: 'SET_CONTRACT';
     id: string;
     contractHash: Hash | null;
     paramsYaml: string;
@@ -79,16 +75,16 @@ type ModalAction =
     dataYaml: string;
     dataSchema: object;
   }
-  | { type: "ADD_CLAIM"; claim: ClaimEntry }
-  | { type: "REMOVE_CLAIM"; extendedIndex: number };
+  | { type: 'ADD_CLAIM'; claim: ClaimEntry }
+  | { type: 'REMOVE_CLAIM'; extendedIndex: number };
 
 function emptyOutput(): OutputEntry {
   return {
     id: crypto.randomUUID(),
     contractHash: null,
-    paramsYaml: "",
+    paramsYaml: '',
     paramsSchema: {},
-    dataYaml: "",
+    dataYaml: '',
     dataSchema: {},
     value: 0,
     selfClaim: false,
@@ -97,24 +93,22 @@ function emptyOutput(): OutputEntry {
 
 function reducer(state: ModalState, action: ModalAction): ModalState {
   switch (action.type) {
-    case "ADD_OUTPUT":
+    case 'ADD_OUTPUT':
       return { ...state, outputs: [...state.outputs, emptyOutput()] };
 
-    case "REMOVE_OUTPUT":
+    case 'REMOVE_OUTPUT':
       return {
         ...state,
         outputs: state.outputs.filter((o) => o.id !== action.id),
       };
 
-    case "UPDATE_OUTPUT":
+    case 'UPDATE_OUTPUT':
       return {
         ...state,
-        outputs: state.outputs.map((o) =>
-          o.id === action.id ? { ...o, ...action.patch } : o
-        ),
+        outputs: state.outputs.map((o) => o.id === action.id ? { ...o, ...action.patch } : o),
       };
 
-    case "SET_CONTRACT":
+    case 'SET_CONTRACT':
       return {
         ...state,
         outputs: state.outputs.map((o) =>
@@ -131,15 +125,13 @@ function reducer(state: ModalState, action: ModalAction): ModalState {
         ),
       };
 
-    case "ADD_CLAIM":
+    case 'ADD_CLAIM':
       return { ...state, claims: [...state.claims, action.claim] };
 
-    case "REMOVE_CLAIM":
+    case 'REMOVE_CLAIM':
       return {
         ...state,
-        claims: state.claims.filter((c) =>
-          c.extendedIndex !== action.extendedIndex
-        ),
+        claims: state.claims.filter((c) => c.extendedIndex !== action.extendedIndex),
       };
 
     default:
@@ -154,17 +146,15 @@ interface SchemaResult {
   defaultYaml: string;
 }
 
-const EMPTY_SCHEMA: SchemaResult = { schema: {}, defaultYaml: "" };
+const EMPTY_SCHEMA: SchemaResult = { schema: {}, defaultYaml: '' };
 
 async function discoverSchema(
   contractHash: Hash,
-  field: "params" | "data",
+  field: 'params' | 'data',
   userValues?: Map<string, unknown>,
 ): Promise<SchemaResult> {
   const contract = getContract(contractHash);
-  const buildFn = field === "params"
-    ? contract?.buildParams
-    : contract?.buildData;
+  const buildFn = field === 'params' ? contract?.buildParams : contract?.buildData;
   if (!buildFn) return EMPTY_SCHEMA;
 
   // The builder reads from a RecordingReader (the Reader-interface replacement
@@ -182,8 +172,7 @@ async function discoverSchema(
 // -- Component --------------------------------------------------------------
 
 export function BlockCreationModal(
-  { scaffold, initialClaims, onClose, renderYamlEditor, parseYaml }:
-    BlockCreationModalProps,
+  { scaffold, initialClaims, onClose, renderYamlEditor, parseYaml }: BlockCreationModalProps,
 ) {
   const initialState: ModalState = {
     outputs: [emptyOutput()],
@@ -202,23 +191,23 @@ export function BlockCreationModal(
     async (outputId: string, hashHex: string) => {
       if (!hashHex) {
         dispatch({
-          type: "SET_CONTRACT",
+          type: 'SET_CONTRACT',
           id: outputId,
           contractHash: null,
-          paramsYaml: "",
+          paramsYaml: '',
           paramsSchema: {},
-          dataYaml: "",
+          dataYaml: '',
           dataSchema: {},
         });
         return;
       }
 
       const contractHash = Hash.fromHex(hashHex);
-      const params = await discoverSchema(contractHash, "params");
-      const data = await discoverSchema(contractHash, "data");
+      const params = await discoverSchema(contractHash, 'params');
+      const data = await discoverSchema(contractHash, 'data');
 
       dispatch({
-        type: "SET_CONTRACT",
+        type: 'SET_CONTRACT',
         id: outputId,
         contractHash,
         paramsYaml: params.defaultYaml,
@@ -242,9 +231,9 @@ export function BlockCreationModal(
           const userValues = yamlToBuilderValues(parsed, fields);
 
           // Re-run builder with user values to discover dynamic schema
-          const refreshed = await discoverSchema(contractHash, "params", userValues);
+          const refreshed = await discoverSchema(contractHash, 'params', userValues);
           dispatch({
-            type: "UPDATE_OUTPUT",
+            type: 'UPDATE_OUTPUT',
             id: outputId,
             patch: { paramsYaml: yaml, paramsSchema: refreshed.schema },
           });
@@ -252,7 +241,7 @@ export function BlockCreationModal(
         }
       }
       dispatch({
-        type: "UPDATE_OUTPUT",
+        type: 'UPDATE_OUTPUT',
         id: outputId,
         patch: { paramsYaml: yaml },
       });
@@ -271,9 +260,9 @@ export function BlockCreationModal(
           const fields = recorder.getFields();
           const userValues = yamlToBuilderValues(parsed, fields);
 
-          const refreshed = await discoverSchema(contractHash, "data", userValues);
+          const refreshed = await discoverSchema(contractHash, 'data', userValues);
           dispatch({
-            type: "UPDATE_OUTPUT",
+            type: 'UPDATE_OUTPUT',
             id: outputId,
             patch: { dataYaml: yaml, dataSchema: refreshed.schema },
           });
@@ -281,7 +270,7 @@ export function BlockCreationModal(
         }
       }
       dispatch({
-        type: "UPDATE_OUTPUT",
+        type: 'UPDATE_OUTPUT',
         id: outputId,
         patch: { dataYaml: yaml },
       });
@@ -343,44 +332,42 @@ export function BlockCreationModal(
   const wellKnown = getWellKnownContracts();
 
   return (
-    <div className="block-creation-backdrop" onClick={onClose}>
+    <div className='block-creation-backdrop' onClick={onClose}>
       <div
-        className="block-creation-modal"
+        className='block-creation-modal'
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="block-creation-header">
-          <span className="block-creation-title">Create Block</span>
-          <button className="graph-detail-close" onClick={onClose}>×</button>
+        <div className='block-creation-header'>
+          <span className='block-creation-title'>Create Block</span>
+          <button className='graph-detail-close' onClick={onClose}>×</button>
         </div>
 
         {/* Claims section */}
-        <div className="block-creation-section">
-          <div className="block-creation-section-label">
+        <div className='block-creation-section'>
+          <div className='block-creation-section-label'>
             Claims ({state.claims.length})
           </div>
-          {state.claims.length === 0 && (
-            <div className="block-creation-empty">No claims added</div>
-          )}
+          {state.claims.length === 0 && <div className='block-creation-empty'>No claims added</div>}
           {state.claims.map((claim) => (
             <div
               key={`${claim.blockHash.toHex()}-${claim.extendedIndex}`}
-              className="claim-row"
+              className='claim-row'
             >
-              <span className="claim-contract">
+              <span className='claim-contract'>
                 {getContractName(claim.output.verifier.contract) ??
                   claim.output.verifier.contract.toHex().slice(0, 12) +
-                    "\u2026"}
+                    '\u2026'}
               </span>
-              <span className="expanded-hash-chip">
+              <span className='expanded-hash-chip'>
                 {claim.blockHash.toHex().slice(0, 12)}&hellip;
               </span>
-              <span className="claim-value mono">v={claim.value}</span>
+              <span className='claim-value mono'>v={claim.value}</span>
               <button
-                className="remove-btn"
+                className='remove-btn'
                 onClick={() =>
                   dispatch({
-                    type: "REMOVE_CLAIM",
+                    type: 'REMOVE_CLAIM',
                     extendedIndex: claim.extendedIndex,
                   })}
               >
@@ -391,20 +378,19 @@ export function BlockCreationModal(
         </div>
 
         {/* Outputs section */}
-        <div className="block-creation-section">
-          <div className="block-creation-section-label">
+        <div className='block-creation-section'>
+          <div className='block-creation-section-label'>
             Outputs ({state.outputs.length})
           </div>
           {state.outputs.map((entry) => (
-            <div key={entry.id} className="output-card">
-              <div className="output-card-header">
+            <div key={entry.id} className='output-card'>
+              <div className='output-card-header'>
                 <select
-                  className="contract-selector"
-                  value={entry.contractHash?.toHex() ?? ""}
-                  onChange={(e) =>
-                    handleContractChange(entry.id, e.target.value)}
+                  className='contract-selector'
+                  value={entry.contractHash?.toHex() ?? ''}
+                  onChange={(e) => handleContractChange(entry.id, e.target.value)}
                 >
-                  <option value="">Select contract...</option>
+                  <option value=''>Select contract...</option>
                   {wellKnown.map((wk) => (
                     <option key={wk.hash.toHex()} value={wk.hash.toHex()}>
                       {wk.name}
@@ -412,14 +398,14 @@ export function BlockCreationModal(
                   ))}
                 </select>
                 <input
-                  className="value-input"
-                  type="number"
+                  className='value-input'
+                  type='number'
                   min={0}
-                  placeholder="Value"
+                  placeholder='Value'
                   value={entry.value}
                   onChange={(e) =>
                     dispatch({
-                      type: "UPDATE_OUTPUT",
+                      type: 'UPDATE_OUTPUT',
                       id: entry.id,
                       patch: {
                         value: Math.max(0, parseInt(e.target.value) || 0),
@@ -427,20 +413,19 @@ export function BlockCreationModal(
                     })}
                 />
                 <button
-                  className="remove-btn"
-                  onClick={() =>
-                    dispatch({ type: "REMOVE_OUTPUT", id: entry.id })}
+                  className='remove-btn'
+                  onClick={() => dispatch({ type: 'REMOVE_OUTPUT', id: entry.id })}
                 >
                   Remove
                 </button>
               </div>
-              <label className="self-claim-toggle">
+              <label className='self-claim-toggle'>
                 <input
-                  type="checkbox"
+                  type='checkbox'
                   checked={entry.selfClaim}
                   onChange={(e) =>
                     dispatch({
-                      type: "UPDATE_OUTPUT",
+                      type: 'UPDATE_OUTPUT',
                       id: entry.id,
                       patch: { selfClaim: e.target.checked },
                     })}
@@ -457,11 +442,10 @@ export function BlockCreationModal(
                     .length > 0 &&
                 (
                   <>
-                    <div className="yaml-editor-label">Params</div>
+                    <div className='yaml-editor-label'>Params</div>
                     {renderYamlEditor({
                       value: entry.paramsYaml,
-                      onChange: (yaml) =>
-                        handleParamsChange(entry.id, entry.contractHash!, yaml),
+                      onChange: (yaml) => handleParamsChange(entry.id, entry.contractHash!, yaml),
                       schema: entry.paramsSchema,
                     })}
                   </>
@@ -476,11 +460,10 @@ export function BlockCreationModal(
                     .length > 0 &&
                 (
                   <>
-                    <div className="yaml-editor-label">Data</div>
+                    <div className='yaml-editor-label'>Data</div>
                     {renderYamlEditor({
                       value: entry.dataYaml,
-                      onChange: (yaml) =>
-                        handleDataChange(entry.id, entry.contractHash!, yaml),
+                      onChange: (yaml) => handleDataChange(entry.id, entry.contractHash!, yaml),
                       schema: entry.dataSchema,
                     })}
                   </>
@@ -488,19 +471,19 @@ export function BlockCreationModal(
             </div>
           ))}
           <button
-            className="add-btn"
-            onClick={() => dispatch({ type: "ADD_OUTPUT" })}
+            className='add-btn'
+            onClick={() => dispatch({ type: 'ADD_OUTPUT' })}
           >
             + Add Output
           </button>
         </div>
 
         {/* Footer */}
-        <div className="creation-footer">
-          <span className="throughput-indicator">
+        <div className='creation-footer'>
+          <span className='throughput-indicator'>
             Claims: {claimTotal} | Outputs: {outputTotal}
           </span>
-          <button className="create-btn" onClick={handleSubmit}>
+          <button className='create-btn' onClick={handleSubmit}>
             Create
           </button>
         </div>

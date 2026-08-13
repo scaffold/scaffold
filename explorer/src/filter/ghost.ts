@@ -19,7 +19,7 @@ export interface BlockEdges {
 // -- Ghost computation ------------------------------------------------------
 
 /** Hex string for the zero hash (genesis anchor). */
-const ZERO_HEX = "0".repeat(64);
+const ZERO_HEX = '0'.repeat(64);
 
 /**
  * Compute the set of ghost block hashes.

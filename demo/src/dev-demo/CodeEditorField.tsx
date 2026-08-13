@@ -1,6 +1,6 @@
-import React from "react";
-import "./monacoSetup.ts";
-import MonacoEditor from "@monaco-editor/react";
+import React from 'react';
+import './monacoSetup.ts';
+import MonacoEditor from '@monaco-editor/react';
 
 export interface CodeEditorFieldProps {
   value: string;
@@ -17,7 +17,7 @@ export const CodeEditorField = ({
   language,
   onChange,
   readOnly = false,
-  height = "10rem",
+  height = '10rem',
   lineNumbers = false,
 }: CodeEditorFieldProps) => {
   return (
@@ -28,11 +28,11 @@ export const CodeEditorField = ({
       options={{
         readOnly,
         tabSize: 2,
-        lineNumbers: lineNumbers ? "on" : "off",
+        lineNumbers: lineNumbers ? 'on' : 'off',
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
-        wordWrap: "on",
-        renderLineHighlight: readOnly ? "none" : "line",
+        wordWrap: 'on',
+        renderLineHighlight: readOnly ? 'none' : 'line',
         quickSuggestions: { comments: false, strings: true, other: false },
       }}
       onChange={(text) => {

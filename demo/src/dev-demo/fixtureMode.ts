@@ -5,8 +5,8 @@
 // (default) path will go to a remotely-published compiler hash.
 
 export function isFixtureMode(): boolean {
-  if (typeof globalThis === "undefined" || !globalThis.location) return false;
+  if (typeof globalThis === 'undefined' || !globalThis.location) return false;
   const params = new URLSearchParams(globalThis.location.search);
-  const v = params.get("fixture");
-  return v === "1" || v === "true";
+  const v = params.get('fixture');
+  return v === '1' || v === 'true';
 }

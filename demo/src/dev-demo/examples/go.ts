@@ -1,4 +1,4 @@
-import type { Example } from "./index.ts";
+import type { Example } from './index.ts';
 
 export const go: Example = {
   source: `// Optional; only used when params are passed as an object
@@ -13,6 +13,6 @@ func run() {
     scaffold.SetData("response", "Hello " + scaffold.GetParams())
 }
 `,
-  fetchParams: { kind: "bytes", text: "World" },
-  expectedOutput: "Hello World",
+  fetchParams: { kind: 'bytes', text: 'World' },
+  expectedOutput: 'Hello World',
 };

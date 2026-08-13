@@ -94,4 +94,6 @@ In every case where you find a gap or bug -- whether you work around it under di
 ### Other misc instructions
 
 - Don't use `readonly` unless there's a specific reason; it's too verbose to add everywhere.
+- For getter methods, prefer `getProperty()` over `get property()`; it's simpler and less surprising.
+- When registering a listener or subscription, prefer passing an `AbortSignal` over other cancellation mechanisms like returning a callback or a separate `off*` method. Prefer making this parameter required and forcing the caller to pass `neverAbort` from src/util/abortable.ts if they want to keep listening indefinitely. The public scaffold API is the only exception, where we may want to be more lenient or use another more common cancellation mechanism.
 - Test names should describe the expected behavior, even if they're failing.
