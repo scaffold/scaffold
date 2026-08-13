@@ -9,15 +9,15 @@ Just launch the website
 - [ ] Make the CLI work
 - [x] Remove subscription box
 - [x] Implement status bar (# of peers, blocks, etc)
-- [ ] Rewrite "There's only three methods" to reflect the new interfaces.
-- [ ] Hide "A contract development environment" section and top menu "Explorer" link
+- [x] Rewrite "There's only three methods" to reflect the new interfaces.
+- [x] Hide "A contract development environment" section and top menu "Explorer" link
 - [ ] More landing page content about applications and what it can be used for (see https://iii.dev/ for inspiration)
 - [x] Update github link to https://github.com/scaffold/scaffold
-- [ ] Update install command
+- [x] Update install command
 - [x] Get rid of `0xdda8ecfd22ea`
 - [x] Update bottom links (remove Explorer, discord, bluesky, RSS)
 - [x] Update 404 page
-- [ ] Update getting started page
+- [x] Update getting started page
 - [x] Update concepts page
 - [x] Update FAQ page
 - [x] Update "writing contracts" page

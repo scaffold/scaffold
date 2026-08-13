@@ -1,5 +1,7 @@
 # Scaffold
 
+> This document is a work in progress. Most of the high-level ideas are relatively stable, but many of the details still need refinement and clarity.
+
 ## 1. Abstract
 
 Scaffold is a protocol for trusted distributed computation. Work is published as blocks, which are accepted optimistically and organized into a balanced forest by aggregators. Aggregators sample random blocks in the tree to evaluate its risk, and if they're confident they insure the tree. There's always an active insurance for any given block; if an aggregator finds a fault (invalid computation, double-spend, etc), they present a proof to the currently active insurance and receive a reward. The failing block is disqualified and its throughput burned to allow another claim on the incorrectly claimed outputs. Consensus weight is real, measured verification cost, estimated by unbiased sampling and evaluation of the sampled blocks. The balanced forest gives O(log N) claim resolution, inclusion proofs, and trust decisions. The result is a protocol light enough for browsers to achieve fast consensus.

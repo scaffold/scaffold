@@ -32,7 +32,7 @@ export interface ContractEnv {
   params(truncate?: number): Uint8Array;
 
   // These set and return self-claimed outputs with amount === 0
-  getResult(key?: Predicate): Uint8Array;
+  getResult(key?: Predicate): MaybePromise<Uint8Array>;
   setResult(result: Uint8Array, key?: Predicate): void;
 
   // The `output` predicate is the unclaimed output, defaulting to the currently executing predicate

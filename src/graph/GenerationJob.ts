@@ -56,6 +56,8 @@ export class GenerationJob implements Job {
       }
 
       this.ctx.get(DraftStore).cancel(this.draft);
+
+      throw err;
     } finally {
       this.draft = undefined;
     }

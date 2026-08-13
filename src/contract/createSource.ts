@@ -1,4 +1,3 @@
-import { error } from '../util/functional.ts';
 import {
   BoolSource,
   BytesSource,

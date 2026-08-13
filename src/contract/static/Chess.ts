@@ -72,7 +72,7 @@ export const chessContract: Contract = {
     const match = reject('chess params', () => matchId(params.read(1)));
 
     if (mode === CHESS_NEW) {
-      const seed = reject('chess seed', () => decodeSeed(env.getResult()));
+      const seed = await reject('chess seed', async () => decodeSeed(await env.getResult()));
       // The pot is white's stake alone, so only white can open the match. Black matching it needs
       // a join handshake, and that needs both players to sign one block.
       env.sign(hex2bin(seed.white));
@@ -89,7 +89,7 @@ export const chessContract: Contract = {
 
     // Read the action before claiming, so a node that was not asked to act gives up before
     // reserving the match.
-    const action = reject('chess action', () => decodeAction(env.getResult()));
+    const action = await reject('chess action', async () => decodeAction(await env.getResult()));
 
     const claimed = await env.claimOne();
     const state = reject('chess state', () => decodeState(claimed.body));

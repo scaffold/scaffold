@@ -63,7 +63,22 @@ export class GenerationEnv implements ContractEnv {
     if (this.result !== undefined) {
       return this.result;
     } else {
-      throw new Error(`Ingenerable: No result provided`);
+      return new Promise<Uint8Array>((resolve) => {
+        const controller = new AbortController();
+        this.ctx.get(OutputIndex).onOutput(this.predicate, (output) => {
+          const body = output.output.body;
+
+          // Only outputs with a body
+          if (body === undefined) return;
+
+          // Only self-claimed outputs
+          if (!output.producer.payload.claims.includes(BigInt(output.outputIndex))) return;
+
+          controller.abort();
+
+          resolve(body);
+        }, controller.signal);
+      });
     }
   }
 

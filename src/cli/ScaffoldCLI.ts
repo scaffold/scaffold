@@ -254,8 +254,14 @@ export class ScaffoldCLI {
   }
 
   private createSourceFromArg(arg: string): SourceRoot {
+    arg = arg.trim();
     if (/^\.*\//.test(arg)) {
       return () => this.createSourceFromFs(this.deps, arg);
+    } else if (
+      (arg[0] === '[' && arg[arg.length - 1] === ']') ||
+      (arg[0] === '{' && arg[arg.length - 1] === '}')
+    ) {
+      return () => createSource(JSON.parse(arg));
     } else {
       return () => ({ type: ValueType.String, value: arg });
     }
@@ -302,6 +308,8 @@ export class ScaffoldCLI {
       params: this.createSourceFromArg(params),
       onResult: (result) => {
         this.deps.stdout(result?.body ?? new Uint8Array());
+
+        // Print a newline
         this.deps.stdout(new Uint8Array([10]));
       },
     });

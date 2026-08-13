@@ -8,14 +8,14 @@ import { ValueType } from '../values.ts';
 export const BLOB_CONTRACT = Hash.digest('blob');
 
 export const blobContract: Contract = {
-  run(env) {
+  async run(env) {
     if (env.params().length !== HASH_SIZE) {
       throw new Error(
         `BLOB_CONTRACT verifier params must be ${HASH_SIZE} bytes, got ${env.params().length}`,
       );
     }
     const expected = Hash.fromBytes(env.params());
-    const actual = Hash.digest(env.getResult());
+    const actual = Hash.digest(await env.getResult());
     if (!Hash.equals(actual, expected)) {
       throw new Error(
         `BLOB_CONTRACT preimage mismatch: expected ${expected.toHex()}, got ${actual.toHex()}`,
