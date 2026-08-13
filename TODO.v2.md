@@ -4,11 +4,11 @@
 
 Just launch the website
 
-- [ ] Write blog post
+- [x] Write blog post
 - [x] Run the signaling server
 - [x] Point relay.scaffold.io at 5.78.93.43
-- [ ] Point bootstrap url at signaling server
-- [ ] Publish new npm package
+- [x] Point bootstrap url at signaling server
+- [x] Publish new npm package
 - [ ] Move website/ to scaffold.github.io/
 - [x] Make the CLI work
 - [x] Remove subscription box

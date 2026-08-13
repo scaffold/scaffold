@@ -9,7 +9,7 @@ export const HELLO_CONTRACT = Hash.digest('hello');
 export const helloContract: Contract = {
   run(env) {
     const name = bin2str(env.params());
-    const response = str2bin(`Hello, ${name}`);
+    const response = str2bin(`Hello ${name}!`);
     env.setResult(response);
   },
 

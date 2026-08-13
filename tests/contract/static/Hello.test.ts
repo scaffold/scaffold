@@ -13,9 +13,9 @@ Deno.test('hello params round-trip through the name', async () => {
 });
 
 Deno.test('the hello body round-trips through the message', async () => {
-  const built = await helloContract.buildBody!(() => createSource({ message: 'Hello, Joel' }));
-  assertEquals(built, str2bin('Hello, Joel'));
+  const built = await helloContract.buildBody!(() => createSource({ message: 'Hello Joel!' }));
+  assertEquals(built, str2bin('Hello Joel!'));
   assertEquals(await createSink((sink) => helloContract.walkBody!(built, sink)), {
-    message: 'Hello, Joel',
+    message: 'Hello Joel!',
   });
 });

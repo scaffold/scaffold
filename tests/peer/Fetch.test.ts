@@ -16,7 +16,7 @@ import { neverAbort } from '../../src/util/abortable.ts';
 
 const CONTRACT = Hash.digest('demo');
 const PARAMS = str2bin('world');
-const ANSWER = str2bin('Hello, world');
+const ANSWER = str2bin('Hello world!');
 
 class RecordingDraftStore extends DraftStore {
   created: Draft[] = [];
