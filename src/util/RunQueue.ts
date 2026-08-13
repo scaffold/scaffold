@@ -1,3 +1,4 @@
+import { Logger } from '../interfaces/LoggingProvider.ts';
 import { arrCall } from './array.ts';
 import { assert, error } from './functional.ts';
 import { MaybePromise } from './MaybePromise.ts';
@@ -68,7 +69,7 @@ export class RunQueue implements Disposable {
   };
   private countsListeners = new Set<(counts: JobCounts) => void>();
 
-  constructor(private config: RunQueueConfig) {}
+  constructor(private config: RunQueueConfig, private log: Logger | undefined) {}
 
   run<ResultType>(job: Job<ResultType>, signal?: AbortSignal): Promise<ResultType> {
     assert(!this.jobs.has(job));
@@ -80,7 +81,7 @@ export class RunQueue implements Disposable {
         onError: reject,
       });
       this.counts[JobState.Pending]++;
-      arrCall(this.countsListeners, [this.counts]);
+      arrCall(this.countsListeners, this.log, this.counts);
       this.dispatch();
     });
   }
@@ -95,7 +96,7 @@ export class RunQueue implements Disposable {
     this.counts[entry.state]--;
     this.counts[JobState.Removed]++;
     this.jobs.delete(job);
-    arrCall(this.countsListeners, [this.counts]);
+    arrCall(this.countsListeners, this.log, this.counts);
     this.dispatch();
   }
 
@@ -169,7 +170,7 @@ export class RunQueue implements Disposable {
     this.counts[handle.state]--;
     this.counts[newState]++;
     handle.state = newState;
-    arrCall(this.countsListeners, [this.counts]);
+    arrCall(this.countsListeners, this.log, this.counts);
   }
 
   private checkCounts() {

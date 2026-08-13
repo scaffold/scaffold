@@ -49,7 +49,7 @@ export class GenerationJob implements Job {
       }
     } catch (err) {
       if (!(err instanceof CancelError)) {
-        this.ctx.logger('generation')?.error('generateFailed', {
+        this.ctx.logger('generation_job')?.error('generateFailed', {
           contract: this.predicate.contract.toHex(),
           err,
         });

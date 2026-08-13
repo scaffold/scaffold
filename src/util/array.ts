@@ -11,8 +11,8 @@ export const arrRemove = <T>(arr: T[], value: T) => {
 // so pass a logger wherever one is in reach -- otherwise the throw is lost.
 export const arrCall = <Args extends unknown[]>(
   arr: Iterable<(...args: Args) => void>,
-  args: Args,
-  log?: Logger,
+  log: Logger | undefined,
+  ...args: Args
 ) => {
   for (const cb of arr) {
     try {

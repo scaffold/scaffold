@@ -10,6 +10,6 @@ export class ExecutionQueueConfig implements RunQueueConfig {
 
 export class ExecutionQueue extends RunQueue {
   constructor(ctx: Context) {
-    super(ctx.get(ExecutionQueueConfig));
+    super(ctx.get(ExecutionQueueConfig), ctx.logger('execution_queue'));
   }
 }

@@ -36,6 +36,7 @@ const stubEnv = (): ContractEnv & { results: Uint8Array[] } => {
     sign: () => todo(),
     getResult: () => str2bin('result'),
     setResult: (r) => void results.push(r),
+    debug: () => {},
   };
 };
 

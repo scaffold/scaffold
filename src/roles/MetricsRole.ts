@@ -128,7 +128,7 @@ export class MetricsRole {
   }
 
   private callListeners() {
-    arrCall(this.listeners, [this.cloneMetrics()]);
+    arrCall(this.listeners, this.ctx.logger('metrics_role'), this.cloneMetrics());
   }
 
   private cloneMetrics(): Metrics {

@@ -106,5 +106,9 @@ export class VerificationEnv implements ContractEnv {
     }
   }
 
+  debug(message: string, data?: Record<string, unknown>): void {
+    this.ctx.logger('verification_env')?.debug(message, data);
+  }
+
   finalize() {}
 }

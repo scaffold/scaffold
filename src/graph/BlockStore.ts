@@ -63,7 +63,7 @@ export class BlockStore {
       this.atoms.set(hash.toPrimitive(), atom);
       if (!skipIngestion) {
         this.ctx.get(AtomSerializer).ingest(atom);
-        arrCall(this.ingestionListeners, [atom]);
+        arrCall(this.ingestionListeners, this.ctx.logger('block_store'), atom);
       }
       return atom;
     } else {
@@ -77,7 +77,7 @@ export class BlockStore {
   // TODO: Make the ingestion flow more streamlined; this is kinda ugly
   doSkippedIngestion(atom: Block) {
     this.ctx.get(AtomSerializer).ingest(atom);
-    arrCall(this.ingestionListeners, [atom]);
+    arrCall(this.ingestionListeners, this.ctx.logger('block_store'), atom);
   }
 
   private makeRef(hash: Hash): BlockRef {

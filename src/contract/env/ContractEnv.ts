@@ -59,4 +59,6 @@ export interface ContractEnv {
 
   waitUntil(timestampMs: number): MaybePromise<void>;
   sign(publicKey: Uint8Array): void;
+
+  debug(message: string, data?: Record<string, unknown>): void;
 }

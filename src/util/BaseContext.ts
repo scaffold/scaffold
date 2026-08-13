@@ -1,3 +1,4 @@
+import { Logger } from '../interfaces/LoggingProvider.ts';
 import { arrCall } from './array.ts';
 import { assert } from './functional.ts';
 import { mapPop, multimapPop, multimapPut } from './map.ts';
@@ -9,6 +10,8 @@ export interface MaybeDisposable {
 }
 
 export abstract class BaseContext {
+  abstract logger(system: string): Logger | undefined;
+
   private objs = new Map<new (ctx: never) => unknown, unknown>();
   private constructing = new Set<new (ctx: never) => unknown>();
 
@@ -62,7 +65,7 @@ export abstract class BaseContext {
       }
 
       const listeners = mapPop(this.listeners, Type);
-      if (listeners !== undefined) arrCall(listeners, [obj]);
+      if (listeners !== undefined) arrCall(listeners, this.logger('context'), obj);
     }
 
     return this.objs.get(Type) as T;

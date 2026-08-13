@@ -56,7 +56,7 @@ export class EventLogProvider implements LoggingProvider {
     }
 
     // No logger here: a sink cannot log its own subscriber's failure
-    arrCall(this.subscribers, [entry]);
+    arrCall(this.subscribers, undefined, entry);
   }
 
   /** Fires synchronously after the entry lands, so subscribers see buffer order. */

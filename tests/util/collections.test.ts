@@ -325,19 +325,21 @@ Deno.test('arrCall: invokes every callback with the args', () => {
       (a: number, b: string) => void seen.push(`1:${a}${b}`),
       (a: number, b: string) => void seen.push(`2:${a}${b}`),
     ],
-    [7, 'x'],
+    undefined,
+    7,
+    'x',
   );
   assertEquals(seen, ['1:7x', '2:7x']);
 });
 
 Deno.test('arrCall: accepts any iterable', () => {
   const seen: number[] = [];
-  arrCall(new Set([() => void seen.push(1), () => void seen.push(2)]), []);
+  arrCall(new Set([() => void seen.push(1), () => void seen.push(2)]), undefined);
   assertEquals(seen, [1, 2]);
 });
 
 Deno.test('arrCall: an empty iterable is a no-op', () => {
-  arrCall([], []);
+  arrCall([], undefined);
 });
 
 Deno.test('arrCall: a Set survives a callback removing itself', () => {
@@ -350,7 +352,7 @@ Deno.test('arrCall: a Set survives a callback removing itself', () => {
   };
   set.add(first);
   set.add(() => void seen.push(2));
-  arrCall(set, []);
+  arrCall(set, undefined);
   assertEquals(seen, [1, 2]);
 });
 

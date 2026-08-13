@@ -1,7 +1,11 @@
 import { assert, assertEquals, assertStrictEquals, assertThrows } from '@std/assert';
 import { BaseContext } from '../../src/util/BaseContext.ts';
 
-class TestContext extends BaseContext {}
+class TestContext extends BaseContext {
+  override logger() {
+    return undefined;
+  }
+}
 
 class Leaf {
   value = 1;

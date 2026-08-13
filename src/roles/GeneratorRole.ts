@@ -42,7 +42,7 @@ export class GeneratorRole implements Disposable {
     try {
       await this.ctx.get(ExecutionQueue).run(job);
     } catch (err) {
-      this.ctx.logger('generator')?.error('generationFailed', {
+      this.ctx.logger('generator_role')?.error('generationFailed', {
         block: block.hash.toHex(),
         outputIdx,
         err,

@@ -45,6 +45,6 @@ export const aggregationContract: Contract = {
   },
 
   debug(params) {
-    return `aggregation()`;
+    return `aggregation(${deserializeAggregationParams(params).level})`;
   },
 };

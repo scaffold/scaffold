@@ -62,8 +62,7 @@ export const counterContract: Contract = {
         }
         newSum += inc;
       } catch (err) {
-        // TODO: env.debug()
-        console.error(err);
+        env.debug('invalidIncrement', { body: claim.body, err });
       }
     }
 

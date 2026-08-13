@@ -184,6 +184,10 @@ export class GenerationEnv implements ContractEnv {
     }
   }
 
+  debug(message: string, data?: Record<string, unknown>): void {
+    this.ctx.logger('generation_env')?.debug(message, data);
+  }
+
   finalize() {
     this.updateDraft();
   }

@@ -43,15 +43,15 @@ export class Transport extends TransportBase implements AsyncDisposable {
   }
 
   protected override onConnectionReady(conn: Connection): void {
-    arrCall(this.connectionListeners, [conn], this.getLogger());
+    arrCall(this.connectionListeners, this.getLogger(), conn);
   }
 
   protected override onConnectionData(conn: Connection, data: Uint8Array): void {
-    arrCall(this.dataListeners, [conn, data], this.getLogger());
+    arrCall(this.dataListeners, this.getLogger(), conn, data);
   }
 
   protected override onConnectionClosed(conn: Connection): void {
-    arrCall(this.closedListeners, [conn], this.getLogger());
+    arrCall(this.closedListeners, this.getLogger(), conn);
   }
 
   protected override getLogger(): ScopedLogger | undefined {

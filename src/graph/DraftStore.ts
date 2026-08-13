@@ -47,7 +47,7 @@ export class DraftStore {
   private log: ScopedLogger | undefined;
 
   constructor(private ctx: Context) {
-    this.log = ctx.logger('draft');
+    this.log = ctx.logger('draft_store');
   }
 
   onBuilt(draft: Draft, cb: (block?: Block) => void, signal: AbortSignal) {
@@ -181,7 +181,7 @@ export class DraftStore {
     this.ctx.get(BlockStore).doSkippedIngestion(block);
     for (const selDraft of selectedDrafts) {
       if (selDraft.type === DRAFT_TYPE) {
-        arrCall(selDraft.listeners, [block], this.log);
+        arrCall(selDraft.listeners, this.log, block);
       }
     }
   }

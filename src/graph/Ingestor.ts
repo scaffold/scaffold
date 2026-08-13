@@ -152,30 +152,33 @@ export class BlockIngestor implements Ingestor<Block> {
 
   ingest(block: Block): void {
     for (const link of block.anchoringNodes) {
-      arrCall(link.listeners, [{ type: BlockActionType.LinkAnchor, anchor: block }]);
+      arrCall(link.listeners, this.ctx.logger('ingestor'), {
+        type: BlockActionType.LinkAnchor,
+        anchor: block,
+      });
     }
 
     if (block.anchor !== undefined) {
-      arrCall(block.anchor.listeners, [{
+      arrCall(block.anchor.listeners, this.ctx.logger('ingestor'), {
         type: BlockActionType.LinkAnchoringNode,
         anchoringNode: block,
-      }]);
+      });
     }
 
     for (const link of block.aggregatingNodes) {
-      arrCall(link.listeners, [{
+      arrCall(link.listeners, this.ctx.logger('ingestor'), {
         type: BlockActionType.LinkAggregate,
         aggregate: block,
         index: link.aggregates.findIndex((x) => x.block === block),
-      }]);
+      });
     }
 
     for (let i = 0; i < block.aggregates.length; i++) {
-      arrCall(block.aggregates[i].block.listeners, [{
+      arrCall(block.aggregates[i].block.listeners, this.ctx.logger('ingestor'), {
         type: BlockActionType.LinkAggregatingNode,
         aggregatingNode: block,
         index: i,
-      }]);
+      });
     }
 
     for (const prop of mapPop(this.newlyResolved, block) ?? []) {
@@ -183,11 +186,17 @@ export class BlockIngestor implements Ingestor<Block> {
 
       if (prop.type === OutputResolverType.Claim) {
         if (prop.claimer.type === AtomType.Block) {
-          arrCall(prop.claimer.listeners, [{ type: BlockActionType.LinkClaim, claim: prop }]);
+          arrCall(prop.claimer.listeners, this.ctx.logger('ingestor'), {
+            type: BlockActionType.LinkClaim,
+            claim: prop,
+          });
         }
-        arrCall(prop.producer.listeners, [{ type: BlockActionType.LinkClaimingNode, claim: prop }]);
+        arrCall(prop.producer.listeners, this.ctx.logger('ingestor'), {
+          type: BlockActionType.LinkClaimingNode,
+          claim: prop,
+        });
 
-        arrCall(this.claimResolutionListeners, [prop]);
+        arrCall(this.claimResolutionListeners, this.ctx.logger('ingestor'), prop);
       }
     }
     assert(this.newlyResolved.size === 0);
