@@ -125,21 +125,22 @@ export abstract class TransportBase {
         }
       },
 
-      createAnonymousConnection: (provider: ConnectionProvider) => {
-        return this.registerConnection(provider);
-      },
+      createAnonymousConnection: (provider: ConnectionProvider) =>
+        this.registerConnection(plugin.name, provider),
     };
   }
 
   // A plugin must have its provider ready to send before calling this: onConnectionReady
   // runs before the driver is handed back, and may send immediately.
   private registerConnection(
+    name: string,
     provider: ConnectionProvider,
     remotePublicKey?: Uint8Array,
   ): ConnectionDriver {
     const log = this.getLogger();
     const conn: Connection = {
       debugName: `conn-${this.nextConnectionIndex++}`,
+      pluginName: name,
       isOpen: true,
       provider,
       splitter: new MessageSplitter(provider.maxMsgSize ?? Infinity),

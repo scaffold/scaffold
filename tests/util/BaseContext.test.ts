@@ -238,12 +238,28 @@ Deno.test('BaseContext: configure reaches a consumer that already read the confi
 
 // -- destruction ordering --
 
-Deno.test('BaseContext: onDestruct callbacks run in reverse registration order', () => {
-  const ctx = new TestContext();
+Deno.test('BaseContext: disposers run in reverse construction order', () => {
   const order: string[] = [];
-  ctx.onDestruct(() => void order.push('a'));
-  ctx.onDestruct(() => void order.push('b'));
-  ctx.onDestruct(() => void order.push('c'));
+  class A {
+    [Symbol.dispose]() {
+      order.push('a');
+    }
+  }
+  class B {
+    [Symbol.dispose]() {
+      order.push('b');
+    }
+  }
+  class C {
+    [Symbol.dispose]() {
+      order.push('c');
+    }
+  }
+
+  const ctx = new TestContext();
+  ctx.get(A);
+  ctx.get(B);
+  ctx.get(C);
   ctx.destruct();
   assertEquals(order, ['c', 'b', 'a']);
 });
@@ -270,20 +286,29 @@ Deno.test('BaseContext: dependents are disposed before their dependencies', () =
   assertEquals(order, ['owner', 'dep']);
 });
 
-Deno.test('BaseContext: disposers are registered at construction time', () => {
+// Teardown order is construction order, so a dependency pulled in lazily -- after its
+// owner was built -- is disposed BEFORE the owner that still holds it.
+Deno.test('BaseContext: a dependency built after its owner is disposed before it', () => {
   const order: string[] = [];
-  class Disposable {
+  class LazyDep {
     [Symbol.dispose]() {
-      order.push('disposer');
+      order.push('dep');
+    }
+  }
+  class LazyOwner {
+    constructor(private ctx: TestContext) {}
+    build() {
+      this.ctx.get(LazyDep);
+    }
+    [Symbol.dispose]() {
+      order.push('owner');
     }
   }
 
   const ctx = new TestContext();
-  ctx.onDestruct(() => void order.push('before'));
-  ctx.get(Disposable);
-  ctx.onDestruct(() => void order.push('after'));
+  ctx.get(LazyOwner).build();
   ctx.destruct();
-  assertEquals(order, ['after', 'disposer', 'before']);
+  assertEquals(order, ['dep', 'owner']);
 });
 
 Deno.test('BaseContext: an unconstructed type contributes no disposer', () => {
@@ -321,9 +346,13 @@ Deno.test('BaseContext: both dispose and asyncDispose are registered', async () 
 // -- sync vs async destruct --
 
 Deno.test('BaseContext: destruct is synchronous when nothing returns a promise', () => {
+  class SyncOnly {
+    [Symbol.dispose]() {}
+  }
+
   const ctx = new TestContext();
   ctx.get(Leaf);
-  ctx.onDestruct(() => {});
+  ctx.get(SyncOnly);
   assertEquals(ctx.destruct(), undefined);
   assertEquals(ctx.debugGetAll().size, 0);
 });
@@ -333,22 +362,31 @@ Deno.test('BaseContext: destruct of an untouched context is synchronous', () => 
 });
 
 Deno.test('BaseContext: a mixed sync/async destruct awaits before resetting', async () => {
-  const ctx = new TestContext();
   const order: string[] = [];
   let release = () => {};
   const gate = new Promise<void>((resolve) => (release = resolve));
 
+  class Gated {
+    [Symbol.asyncDispose]() {
+      order.push('async-start');
+      return gate.then(() => void order.push('async-end'));
+    }
+  }
+  class Sync {
+    [Symbol.dispose]() {
+      order.push('sync');
+    }
+  }
+
+  const ctx = new TestContext();
   ctx.get(Leaf);
-  ctx.onDestruct(() => {
-    order.push('async-start');
-    return gate.then(() => void order.push('async-end'));
-  });
-  ctx.onDestruct(() => void order.push('sync'));
+  ctx.get(Gated);
+  ctx.get(Sync);
 
   const result = ctx.destruct();
   assert(result instanceof Promise);
   assertEquals(order, ['sync', 'async-start']);
-  assertEquals(ctx.debugGetAll().size, 1);
+  assertEquals(ctx.debugGetAll().size, 3);
 
   release();
   await result;
@@ -357,18 +395,25 @@ Deno.test('BaseContext: a mixed sync/async destruct awaits before resetting', as
 });
 
 Deno.test('BaseContext: async destructors are started, not serialised', async () => {
-  const ctx = new TestContext();
   const order: string[] = [];
-  ctx.onDestruct(async () => {
-    order.push('a-start');
-    await Promise.resolve();
-    order.push('a-end');
-  });
-  ctx.onDestruct(async () => {
-    order.push('b-start');
-    await Promise.resolve();
-    order.push('b-end');
-  });
+  class A {
+    async [Symbol.asyncDispose]() {
+      order.push('a-start');
+      await Promise.resolve();
+      order.push('a-end');
+    }
+  }
+  class B {
+    async [Symbol.asyncDispose]() {
+      order.push('b-start');
+      await Promise.resolve();
+      order.push('b-end');
+    }
+  }
+
+  const ctx = new TestContext();
+  ctx.get(A);
+  ctx.get(B);
   await ctx.destruct();
   assertEquals(order, ['b-start', 'a-start', 'b-end', 'a-end']);
 });
@@ -382,8 +427,14 @@ Deno.test('BaseContext: destructing twice throws', () => {
 });
 
 Deno.test('BaseContext: destructing during an async destruct throws', async () => {
+  class Async {
+    [Symbol.asyncDispose]() {
+      return Promise.resolve();
+    }
+  }
+
   const ctx = new TestContext();
-  ctx.onDestruct(() => Promise.resolve());
+  ctx.get(Async);
   const result = ctx.destruct();
   assertThrows(() => ctx.destruct(), Error, 'Cannot destruct a context twice!');
   await result;
@@ -414,35 +465,62 @@ Deno.test('BaseContext: destruct clears the instances and the destructors', () =
 });
 
 Deno.test('BaseContext: a destructor may still reach already-built services', () => {
+  class Reader {
+    seen: Leaf | undefined;
+    constructor(private ctx: TestContext) {}
+    [Symbol.dispose]() {
+      this.seen = this.ctx.get(Leaf);
+    }
+  }
+
   const ctx = new TestContext();
-  let seen: Leaf | undefined;
   const leaf = ctx.get(Leaf);
-  ctx.onDestruct(() => void (seen = ctx.get(Leaf)));
+  const reader = ctx.get(Reader);
   ctx.destruct();
-  assertStrictEquals(seen, leaf);
+  assertStrictEquals(reader.seen, leaf);
 });
 
-Deno.test('BaseContext: a destructor registering another destructor is silently dropped', () => {
-  const order: string[] = [];
+// A destructor can no longer register more teardown work, so pulling in a service that
+// was never built fails loudly instead of silently dropping its disposer.
+Deno.test('BaseContext: a destructor constructing a new service throws', () => {
+  class Late {
+    [Symbol.dispose]() {}
+  }
+  class Rogue {
+    constructor(private ctx: TestContext) {}
+    [Symbol.dispose]() {
+      this.ctx.get(Late);
+    }
+  }
+
   const ctx = new TestContext();
-  ctx.onDestruct(() => {
-    order.push('outer');
-    ctx.onDestruct(() => void order.push('inner'));
-  });
-  ctx.destruct();
-  assertEquals(order, ['outer']);
+  ctx.get(Rogue);
+  assertThrows(
+    () => ctx.destruct(),
+    Error,
+    `Cannot use a context after it's been destructed!`,
+  );
 });
 
 Deno.test('BaseContext: a throwing destructor aborts the remaining teardown', () => {
   const order: string[] = [];
+  class FirstConstructed {
+    [Symbol.dispose]() {
+      order.push('first-constructed');
+    }
+  }
+  class Boom {
+    [Symbol.dispose]() {
+      throw new Error('teardown boom');
+    }
+  }
+
   const ctx = new TestContext();
   ctx.get(Leaf);
-  ctx.onDestruct(() => void order.push('first-registered'));
-  ctx.onDestruct(() => {
-    throw new Error('teardown boom');
-  });
+  ctx.get(FirstConstructed);
+  ctx.get(Boom);
   assertThrows(() => ctx.destruct(), Error, 'teardown boom');
   assertEquals(order, []);
-  assertEquals(ctx.debugGetAll().size, 1);
+  assertEquals(ctx.debugGetAll().size, 3);
   assertThrows(() => ctx.destruct(), Error, 'Cannot destruct a context twice!');
 });

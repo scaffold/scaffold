@@ -1,4 +1,6 @@
+import { arrCall } from './array.ts';
 import { assert } from './functional.ts';
+import { mapPop, multimapPop, multimapPut } from './map.ts';
 import { MaybePromise } from './MaybePromise.ts';
 
 export interface MaybeDisposable {
@@ -9,6 +11,9 @@ export interface MaybeDisposable {
 export abstract class BaseContext {
   private objs = new Map<new (ctx: never) => unknown, unknown>();
   private constructing = new Set<new (ctx: never) => unknown>();
+
+  private listeners = new Map<new (ctx: never) => unknown, ((ctx: object) => void)[]>();
+
   // TODO: AsyncDisposableStack
   private destructors: (() => MaybePromise<void>)[] = [];
   private isDestructed = false;
@@ -38,22 +43,26 @@ export abstract class BaseContext {
       }
       this.constructing.add(Type);
 
+      let obj;
       try {
-        const obj = new Type(this);
+        obj = new Type(this);
         this.objs.set(Type, obj);
-
-        const disposer = obj[Symbol.dispose];
-        if (disposer !== undefined) {
-          this.destructors.push(disposer.bind(obj));
-        }
-
-        const asyncDisposer = obj[Symbol.asyncDispose];
-        if (asyncDisposer !== undefined) {
-          this.destructors.push(asyncDisposer.bind(obj));
-        }
       } finally {
         this.constructing.delete(Type);
       }
+
+      const disposer = obj[Symbol.dispose];
+      if (disposer !== undefined) {
+        this.destructors.push(disposer.bind(obj));
+      }
+
+      const asyncDisposer = obj[Symbol.asyncDispose];
+      if (asyncDisposer !== undefined) {
+        this.destructors.push(asyncDisposer.bind(obj));
+      }
+
+      const listeners = mapPop(this.listeners, Type);
+      if (listeners !== undefined) arrCall(listeners, obj);
     }
 
     return this.objs.get(Type) as T;
@@ -63,8 +72,19 @@ export abstract class BaseContext {
     return this.objs.get(Type) as T | undefined;
   }
 
-  public onDestruct(cb: () => MaybePromise<void>) {
-    this.destructors.push(cb);
+  public onConstruct<T extends object & MaybeDisposable>(
+    Type: new (ctx: this) => T,
+    cb: (obj: T) => void,
+    signal: AbortSignal,
+  ) {
+    if (signal.aborted) return;
+    const obj = this.maybeGet(Type);
+    if (obj !== undefined) {
+      cb(obj);
+    } else {
+      multimapPut(this.listeners, Type, cb);
+      signal.addEventListener('abort', () => multimapPop(this.listeners, Type, cb));
+    }
   }
 
   public debugGetAll() {

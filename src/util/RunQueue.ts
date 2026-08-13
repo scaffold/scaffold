@@ -1,3 +1,4 @@
+import { arrCall } from './array.ts';
 import { assert, error } from './functional.ts';
 import { MaybePromise } from './MaybePromise.ts';
 
@@ -65,6 +66,7 @@ export class RunQueue implements Disposable {
     [JobState.Completed]: 0,
     [JobState.Removed]: 0,
   };
+  private countsListeners = new Set<(counts: JobCounts) => void>();
 
   constructor(private config: RunQueueConfig) {}
 
@@ -78,6 +80,7 @@ export class RunQueue implements Disposable {
         onError: reject,
       });
       this.counts[JobState.Pending]++;
+      arrCall(this.countsListeners, this.counts);
       this.dispatch();
     });
   }
@@ -92,6 +95,7 @@ export class RunQueue implements Disposable {
     this.counts[entry.state]--;
     this.counts[JobState.Removed]++;
     this.jobs.delete(job);
+    arrCall(this.countsListeners, this.counts);
     this.dispatch();
   }
 
@@ -103,6 +107,13 @@ export class RunQueue implements Disposable {
       completed: this.counts[JobState.Completed],
       removed: this.counts[JobState.Removed],
     };
+  }
+
+  onCounts(cb: (counts: JobCounts) => void, signal: AbortSignal): void {
+    if (signal.aborted) return;
+    cb(this.counts);
+    this.countsListeners.add(cb);
+    signal.addEventListener('abort', () => assert(this.countsListeners.delete(cb)));
   }
 
   [Symbol.dispose](): void {
@@ -157,6 +168,7 @@ export class RunQueue implements Disposable {
     this.counts[handle.state]--;
     this.counts[newState]++;
     handle.state = newState;
+    arrCall(this.countsListeners, this.counts);
   }
 
   private checkCounts() {

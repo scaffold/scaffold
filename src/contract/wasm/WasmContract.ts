@@ -22,8 +22,10 @@ export class WasmContract implements Contract {
   private loading?: Promise<Loaded>;
   private loadAbort = new AbortController();
 
-  constructor(private ctx: Context, private contract: Hash) {
-    ctx.onDestruct(() => this.loadAbort.abort());
+  constructor(private ctx: Context, private contract: Hash) {}
+
+  [Symbol.dispose]() {
+    this.loadAbort.abort();
   }
 
   async run(env: ContractEnv, flowCtl: FlowCtl): Promise<void> {

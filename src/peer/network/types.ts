@@ -5,6 +5,8 @@ export interface Connection {
   // Log label only. The Connection object itself is the identity everywhere else.
   debugName: string;
 
+  pluginName: string;
+
   isOpen: boolean;
 
   provider: ConnectionProvider;

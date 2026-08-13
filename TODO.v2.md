@@ -4,26 +4,27 @@
 
 Just launch the website
 
-- Run the signaling server
-- More efficient gossip
-- Make the CLI work
-- Remove subscription box
-- Implement status bar (# of peers, blocks, etc)
-- Rewrite "There's only three methods" to reflect the new interfaces.
-- Hide "A contract development environment" section and top menu "Explorer" link
-- More landing page content about applications and what it can be used for (see https://iii.dev/ for inspiration)
-- Update github link to https://github.com/scaffold/scaffold
-- Update install command
-- Get rid of `0xdda8ecfd22ea`
-- Update bottom links (remove Explorer, discord, bluesky, RSS)
-- Update 404 page
-- Update getting started page
-- Update concepts page
-- Update FAQ page
-- Update "writing contracts" page
-- Update "how it works"
-- Update community page (just github and github discussions)
-- Write blog post
+- [ ] Run the signaling server
+- [ ] More efficient gossip
+- [ ] Make the CLI work
+- [x] Remove subscription box
+- [ ] Implement status bar (# of peers, blocks, etc)
+- [ ] Rewrite "There's only three methods" to reflect the new interfaces.
+- [ ] Hide "A contract development environment" section and top menu "Explorer" link
+- [ ] More landing page content about applications and what it can be used for (see https://iii.dev/ for inspiration)
+- [x] Update github link to https://github.com/scaffold/scaffold
+- [ ] Update install command
+- [ ] Get rid of `0xdda8ecfd22ea`
+- [ ] Update bottom links (remove Explorer, discord, bluesky, RSS)
+- [ ] Update 404 page
+- [ ] Update getting started page
+- [ ] Update concepts page
+- [ ] Update FAQ page
+- [ ] Update "writing contracts" page
+- [ ] Update "how it works"
+- [ ] Update community page (just github and github discussions)
+- [ ] Write blog post
+- [ ] Implement subscription box and re-add it?
 
 Andrew/Austin/Bob MVP
 
@@ -96,7 +97,7 @@ Later
 - [ ] `Hash` keeps the array it is handed (`fromBytes` does not copy, `toBytes` returns the live view) but caches `hex` in the constructor, so mutating the source array afterwards leaves `toHex` and `toBytes`/`equals`/`compare` reporting different hashes -- an identity primitive that can silently change under a map key. Same aliasing surface as the `toBigint` bug above; either copy in the constructor or compute hex lazily. Documented (passing) test in `tests/util/Hash.test.ts` ("Hash: mutating the source array desynchronizes toHex from toBytes")
 - [ ] Tagged JSON is not injective and its decoder is lenient. A plain object `{__t:'H'|'B'|'N', v: string}` encodes byte-identically to a genuine tagged value, so `taggedParse(taggedStringify(x))` turns it into a `Hash`/`Uint8Array`/`bigint`; any payload field literally named `__t` either gets hijacked or throws. Not exploitable today only because `blockPayloadShape` rejects unknown keys and has no free-form object fields. The decoder also accepts non-canonical bodies (`{"__t":"N","v":"0x10"}` -> 16n, `""` -> 0n, unpadded base64, uppercase hex) and ignores extra keys, so distinct wire bytes decode to the same value -- the canonical binary codec must close both. Documented (passing) tests in `tests/util/Json.test.ts`
 - [ ] `mapPut`'s recursion trap deletes the key before running the mutator, so a mutator that throws destroys the entry it was meant to update rather than leaving it unchanged. Same for a throwing creator, which is fine, but the mutator path loses data. Documented (passing) test in `tests/util/collections.test.ts`
-- [ ] `BaseContext` teardown edge cases: a destructor that throws aborts the rest of the teardown, skips `reset()`, and leaves the context marked destructed so it can never be torn down again (the remaining disposers leak silently); a destructor that calls `onDestruct` is silently dropped because `destruct` snapshots with `toReversed()` and `reset()` then discards the array; and `mock()` never registers a mock's `Symbol.dispose`, so a disposable mock is never disposed. Also `mapEntries` drops symbol keys even though its signature admits them. All documented (passing) tests in `tests/util/BaseContext.test.ts` / `tests/util/collections.test.ts`
+- [ ] `BaseContext` teardown edge cases: a destructor that throws aborts the rest of the teardown, skips `reset()`, and leaves the context marked destructed so it can never be torn down again (the remaining disposers leak silently); and `mock()` never registers a mock's `Symbol.dispose`, so a disposable mock is never disposed. Also `mapEntries` drops symbol keys even though its signature admits them. All documented (passing) tests in `tests/util/BaseContext.test.ts` / `tests/util/collections.test.ts`
 - [ ] Nothing handles a deficit no ready draft can cover. `balanceFunds` returns the draft alone with `amount > 0`, and `BlockBuilderBase.checkBalanced`'s `assertEquals` throws straight out of `DraftStore.build`, leaving the draft parked in `Building` with a live retry hook. Under-funding is a normal condition, not a programmer error -- it should park like a placement stall. Worse on the retry path: the same throw escapes a `BlockStore.onIngest` listener, so one unfundable draft breaks ingestion for everyone else. Documented (passing) test in `tests/graph/DraftStore.test.ts` ("a draft nothing can fund throws out of build")
 - [ ] `Config.aggregationFee` is a flat constant (default `0n`), not wp §7's two-component fee -- a flat risk term plus a term scaling with the insured throughput. At `0n` nothing built locally is worth aggregating, so the fee has to become a real computation before aggregation is exercised end to end
 - [ ] Draft merging is all-or-nothing, and merging can make a block unplaceable. Two drafts whose producers sit in trees nothing has merged yet are in nobody's reach at once (wp §4.2), so no anchor covers both and `place` stalls -- taking down the primary draft, which was buildable alone, along with every draft `balanceFunds` pulled in. Adopting a ready aggregation draft can stall a block the same way. The merger needs to be able to drop a selection and retry rather than park the batch; the same fallback the rival-claimant gap below wants
