@@ -9,9 +9,8 @@ import { TextLoggingProvider } from '../plugins/TextLoggingProvider.ts';
 import { neverAbort } from '../src/util/abortable.ts';
 
 const flags = parseArgs(Deno.args, {
-  string: ['port', 'verbosity'],
+  string: ['hostname', 'port', 'publicOrigins', 'verbosity'],
 });
-const port = flags.port ? Number(flags.port) : 8314;
 
 const config = makeDefaultConfig();
 if (flags.verbosity !== undefined) {
@@ -32,10 +31,14 @@ scaffold.getContext().get(BlockStore).onIngest(
   neverAbort,
 );
 
-scaffold.startTransport(new WebsocketServerTransport({ port }), (signal) => {
-  // deno-lint-ignore no-console
-  console.log(`WebSocket announce: ${signal}`);
-});
-
-// deno-lint-ignore no-console
-console.log(`signaling hub listening ws://127.0.0.1:${port}/ `);
+scaffold.startTransport(
+  new WebsocketServerTransport({
+    hostname: flags.hostname,
+    port: flags.port !== undefined ? Number(flags.port) : undefined,
+    publicOrigins: flags.publicOrigins !== undefined ? flags.publicOrigins.split(',') : undefined,
+  }, scaffold.getContext().logger('websocket_server_transport')),
+  (signal) => {
+    // deno-lint-ignore no-console
+    console.log(`WebSocket announce: ${signal}`);
+  },
+);

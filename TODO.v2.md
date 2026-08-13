@@ -6,9 +6,10 @@ Just launch the website
 
 - [ ] Write blog post
 - [x] Run the signaling server
-- [ ] Point relay.scaffold.io at 5.78.93.43
+- [x] Point relay.scaffold.io at 5.78.93.43
 - [ ] Point bootstrap url at signaling server
 - [ ] Publish new npm package
+- [ ] Move website/ to scaffold.github.io/
 - [x] Make the CLI work
 - [x] Remove subscription box
 - [x] Implement status bar (# of peers, blocks, etc)
@@ -206,3 +207,7 @@ Both pre-existing at `deb379f`; neither caused by the rename, and neither blocks
 
 - [ ] `src/graph/ValidityStore.ts` does not parse: `isValid` opens a `mapPut(this.validities, block, () => new Promise(resolve => {}))` and then a dangling `{` block, leaving the braces unbalanced. `deno check src/` dies on it before checking anything else. Nothing imports the file, so `deno check mod.ts` and the v2 suite are both unaffected -- it is in-flight work, left untouched
 - [ ] `deno task test` fails immediately: its `build:wasi-shim` prerequisite does `cd src/contracts/wasi-shim`, but `src/contracts/` moved to `legacy3/` in 29997f0. Only `deno task test:v2` (or `deno test` against the v2 dirs directly) can run today. Either repoint the task at the new shim location or drop the prerequisite
+
+## Surfaced by TLS-terminating relay deployment (2026-08-13)
+
+- [ ] `WebsocketServerTransport` mints its per-connection token into the query string (`/?token=...`), so behind a reverse proxy every live token lands in plaintext access logs during the connect window. Single-use (`pending.delete` on redemption) so the exposure is bounded, but a `Sec-WebSocket-Protocol` subprotocol or a header would keep it out of logs entirely. Deferred deliberately

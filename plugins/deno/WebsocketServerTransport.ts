@@ -8,6 +8,7 @@
 // a fresh per-connection token and routes the matching WS upgrade to the
 // session that issued it.
 
+import { Logger } from '../../src/interfaces/LoggingProvider.ts';
 import {
   AnonymousTransportDriver,
   AuthenticatedTransportDriver,
@@ -17,12 +18,13 @@ import {
   TransportService,
   TransportSession,
 } from '../../src/interfaces/transport.ts';
-import { assert } from '../../src/util/functional.ts';
+import { assert, error } from '../../src/util/functional.ts';
 import { closeAndFlush, isUnshared } from '../util.ts';
 
 export interface WebsocketServerTransportConfig {
+  hostname?: string;
   port?: number;
-  publicHostnames?: string[];
+  publicOrigins?: string[];
 }
 
 interface PendingAuthConn {
@@ -35,7 +37,7 @@ export class WebsocketServerTransport implements TransportPlugin {
   emitsProtocol = 'websocket';
   acceptsProtocols: string[] = [];
 
-  constructor(private config: WebsocketServerTransportConfig = {}) {}
+  constructor(private config: WebsocketServerTransportConfig, private log?: Logger) {}
 
   start(anonymousDriver: AnonymousTransportDriver): TransportService {
     const port = this.config.port ?? 8314;
@@ -45,16 +47,14 @@ export class WebsocketServerTransport implements TransportPlugin {
 
     const originsPromise = (async () => {
       const listen = await listenResolver.promise;
-      const origins = new Set<string>();
-      origins.add(`ws://${listen.hostname}:${listen.port}`);
-      origins.add(`ws://127.0.0.1:${listen.port}`);
-      for (const host of this.config.publicHostnames ?? []) {
-        origins.add(`ws://${host}:${listen.port}`);
-      }
-      return [...origins];
+      this.log?.info(`Listening on ws://${listen.hostname}:${listen.port}`);
+
+      const origins = this.config.publicOrigins ?? [`ws://${listen.hostname}:${listen.port}`];
+      return origins.map(normalizeOrigin);
     })();
 
     const server = Deno.serve({
+      hostname: this.config.hostname,
       port,
       onListen: listenResolver.resolve,
       handler: (req) => {
@@ -148,6 +148,26 @@ function wrapSocket(socket: WebSocket): ConnectionProvider {
 function wireSocket(socket: WebSocket, driver: ConnectionDriver): void {
   socket.onmessage = (e) => driver.recvData(new Uint8Array(e.data as ArrayBuffer));
   socket.onclose = () => driver.close();
+}
+
+// -- Origin helper ------------------------------------------------------
+
+function normalizeOrigin(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    error(`publicOrigins entry is not a valid URL: ${raw}`);
+  }
+  assert(
+    url.protocol === 'ws:' || url.protocol === 'wss:',
+    `publicOrigins entry must use ws: or wss:, got: ${raw}`,
+  );
+  assert(
+    url.pathname === '/' && url.search === '' && url.hash === '' && url.username === '',
+    `publicOrigins entry must be a bare origin with no path or credentials, got: ${raw}`,
+  );
+  return url.origin;
 }
 
 // -- Token helper -------------------------------------------------------
