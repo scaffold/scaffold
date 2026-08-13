@@ -1,7 +1,7 @@
 import { MaybePromise } from '../src/util/MaybePromise.ts';
 
 export function isUnshared(data: Uint8Array): data is Uint8Array<ArrayBuffer> {
-  return !(data.buffer instanceof SharedArrayBuffer);
+  return typeof SharedArrayBuffer === 'undefined' || !(data.buffer instanceof SharedArrayBuffer);
 }
 
 export function orderSignals(fn: (signal: string) => MaybePromise<void>) {

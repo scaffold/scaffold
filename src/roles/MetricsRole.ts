@@ -5,13 +5,14 @@ import { ExecutionQueue } from '../peer/ExecutionQueue.ts';
 import { Transport } from '../peer/network/Transport.ts';
 import { arrCall } from '../util/array.ts';
 import { assert } from '../util/functional.ts';
+import { mapDec, mapInc } from '../util/map.ts';
 import { JobState, RunQueue } from '../util/RunQueue.ts';
 
 export interface Metrics {
   // Connection metrics
   seenPeers: number;
   connectedPeers: number;
-  connectedPeersByPlugin: Record<string, number>;
+  connectedPeersByPlugin: Map<string, number>;
 
   // Job queue metrics
   jobsPending: number;
@@ -35,7 +36,6 @@ export interface Metrics {
   coinsEarned: bigint;
   coinsSpent: bigint;
 }
-type MetricKeys<T> = { [K in keyof Metrics]: Metrics[K] extends T ? K : never }[keyof Metrics];
 
 export class MetricsRole {
   private listeners = new Set<(metrics: Metrics) => void>();
@@ -45,7 +45,7 @@ export class MetricsRole {
     // Connection metrics
     seenPeers: 0,
     connectedPeers: 0,
-    connectedPeersByPlugin: {},
+    connectedPeersByPlugin: new Map(),
 
     // Job queue metrics
     jobsPending: 0,
@@ -77,13 +77,13 @@ export class MetricsRole {
       transport.onConnection((conn) => {
         this.metrics.seenPeers++;
         this.metrics.connectedPeers++;
-        this.metrics.connectedPeersByPlugin[conn.pluginName]++;
+        mapInc(this.metrics.connectedPeersByPlugin, conn.pluginName);
         this.callListeners();
       }, signal);
 
       transport.onClosed((conn) => {
         this.metrics.connectedPeers--;
-        this.metrics.connectedPeersByPlugin[conn.pluginName]--;
+        mapDec(this.metrics.connectedPeersByPlugin, conn.pluginName);
         this.callListeners();
       }, signal);
 
@@ -122,11 +122,19 @@ export class MetricsRole {
 
   onMetrics(cb: (metrics: Metrics) => void, signal?: AbortSignal) {
     if (signal?.aborted) return;
+    cb(this.cloneMetrics());
     this.listeners.add(cb);
     signal?.addEventListener('abort', () => assert(this.listeners.delete(cb)));
   }
 
   private callListeners() {
-    arrCall(this.listeners, this.metrics);
+    arrCall(this.listeners, this.cloneMetrics());
+  }
+
+  private cloneMetrics(): Metrics {
+    return {
+      ...this.metrics,
+      connectedPeersByPlugin: new Map(this.metrics.connectedPeersByPlugin),
+    };
   }
 }
