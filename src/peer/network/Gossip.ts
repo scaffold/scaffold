@@ -6,6 +6,12 @@ import { GossipBase } from './GossipBase.ts';
 import { Transport } from './Transport.ts';
 import { Connection } from './types.ts';
 
+export class GossipConfig {
+  // Off makes a peer answer-only: it still floods what it ingests from now on, but a
+  // newly connected peer gets nothing it did not ask for.
+  backfillOnConnect = false;
+}
+
 export class Gossip extends GossipBase implements Disposable {
   private disposeController = new AbortController();
 
@@ -16,7 +22,9 @@ export class Gossip extends GossipBase implements Disposable {
     const transport = this.ctx.get(Transport);
 
     transport.onData((conn, data) => this.recvData(conn, data), signal);
-    transport.onConnection((conn) => this.backfill(conn), signal);
+    transport.onConnection((conn) => {
+      if (this.ctx.get(GossipConfig).backfillOnConnect) this.backfill(conn);
+    }, signal);
     this.ctx.get(BlockStore).onIngest((block) => this.floodBlock(block), signal);
   }
 

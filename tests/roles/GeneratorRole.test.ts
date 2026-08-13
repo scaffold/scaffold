@@ -4,7 +4,7 @@ import { Context } from '../../src/Context.ts';
 import { BlockStore } from '../../src/graph/BlockStore.ts';
 import { DraftStore } from '../../src/graph/DraftStore.ts';
 import { AtomSource, Block, OutputResolverType } from '../../src/graph/types.ts';
-import { GeneratorRole } from '../../src/roles/GeneratorRole.ts';
+import { GeneratorRole, GeneratorRoleConfig } from '../../src/roles/GeneratorRole.ts';
 import { neverAbort } from '../../src/util/abortable.ts';
 import { Hash } from '../../src/util/Hash.ts';
 import { makeTestContext } from '../helpers/v2.ts';
@@ -21,6 +21,9 @@ interface Harness {
 
 function harness(): Harness {
   const ctx = makeTestContext();
+
+  // Every test here is about aggregating, which a node skips by default.
+  ctx.configure(GeneratorRoleConfig, { skipAggregation: false });
 
   // Genesis first, so the aggregation generator is the only one running -- the role
   // backfills nothing, and genesis' signature outputs would otherwise spawn their own.

@@ -87,6 +87,9 @@ function parseArgv(argv: string[]) {
       'bootstrap_urls',
       'verbosity',
       'timeout',
+      // Positionals too: without this an all-digit hash ('1111...') is coerced to a
+      // JS number and reaches the contract as '1.1111111111111112e+63'.
+      '_',
     ],
     alias: { h: 'help', v: 'version' },
   });

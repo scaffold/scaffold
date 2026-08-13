@@ -4,6 +4,13 @@ import { ExecutionQueue } from '../peer/ExecutionQueue.ts';
 import { Block } from '../graph/types.ts';
 import { OutputIndex } from '../graph/OutputIndex.ts';
 import { GenerationJob } from '../graph/GenerationJob.ts';
+import { AGGREGATION_CONTRACT } from '../contract/static/Aggregation.ts';
+import { Hash } from '../util/Hash.ts';
+
+export class GeneratorRoleConfig {
+  // Disabled for now until we can verify subtrees are mergeable
+  skipAggregation = true;
+}
 
 export class GeneratorRole implements Disposable {
   private disposeController = new AbortController();
@@ -38,6 +45,17 @@ export class GeneratorRole implements Disposable {
 
     const output = block.payload.outputs[outputIdx];
 
+    if (
+      this.ctx.get(GeneratorRoleConfig).skipAggregation &&
+      Hash.equals(output.contract, AGGREGATION_CONTRACT)
+    ) {
+      this.ctx.logger('generator_role')?.debug('aggregationSkipped', {
+        block: block.hash.toHex(),
+        outputIdx,
+      });
+      return;
+    }
+
     const job = new GenerationJob(this.ctx, output);
     try {
       await this.ctx.get(ExecutionQueue).run(job);
@@ -45,7 +63,7 @@ export class GeneratorRole implements Disposable {
       this.ctx.logger('generator_role')?.error('generationFailed', {
         block: block.hash.toHex(),
         outputIdx,
-        err,
+        err: err instanceof Error ? (err.stack ?? `${err.name}: ${err.message}`) : String(err),
       });
     } finally {
       this.ctx.get(ExecutionQueue).remove(job);

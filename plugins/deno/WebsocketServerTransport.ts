@@ -20,6 +20,11 @@ import {
 import { assert } from '../../src/util/functional.ts';
 import { closeAndFlush, isUnshared } from '../util.ts';
 
+export interface WebsocketServerTransportConfig {
+  port?: number;
+  publicHostnames?: string[];
+}
+
 interface PendingAuthConn {
   driver: AuthenticatedTransportDriver;
   session: WeakRef<TransportSession> | null;
@@ -30,12 +35,7 @@ export class WebsocketServerTransport implements TransportPlugin {
   emitsProtocol = 'websocket';
   acceptsProtocols: string[] = [];
 
-  constructor(
-    private config: {
-      port?: number;
-      publicHostnames?: string[];
-    } = {},
-  ) {}
+  constructor(private config: WebsocketServerTransportConfig = {}) {}
 
   start(anonymousDriver: AnonymousTransportDriver): TransportService {
     const port = this.config.port ?? 8314;

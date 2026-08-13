@@ -60,26 +60,27 @@ export class GenerationEnv implements ContractEnv {
   }
 
   getResult() {
-    if (this.result !== undefined) {
-      return this.result;
-    } else {
-      return new Promise<Uint8Array>((resolve) => {
-        const controller = new AbortController();
-        this.ctx.get(OutputIndex).onOutput(this.predicate, (output) => {
-          const body = output.output.body;
+    if (this.result !== undefined) return this.result;
 
-          // Only outputs with a body
-          if (body === undefined) return;
+    return new Promise<Uint8Array>((resolve) => {
+      const controller = new AbortController();
+      this.ctx.get(OutputIndex).onOutput(this.predicate, (output) => {
+        const body = output.output.body;
 
-          // Only self-claimed outputs
-          if (!output.producer.payload.claims.includes(BigInt(output.outputIndex))) return;
+        // Only outputs with a body
+        if (body === undefined) return;
 
-          controller.abort();
+        // Only self-claimed outputs
+        if (!output.producer.payload.claims.includes(BigInt(output.outputIndex))) return;
 
-          resolve(body);
-        }, controller.signal);
-      });
-    }
+        controller.abort();
+
+        this.result = body;
+        this.updateDraft();
+
+        resolve(body);
+      }, controller.signal);
+    });
   }
 
   setResult(result: Uint8Array) {

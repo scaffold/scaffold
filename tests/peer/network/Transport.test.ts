@@ -3,7 +3,7 @@ import { Context } from '../../../src/Context.ts';
 import { BlockStore } from '../../../src/graph/BlockStore.ts';
 import { DraftStore } from '../../../src/graph/DraftStore.ts';
 import { AtomSource, Block } from '../../../src/graph/types.ts';
-import { Gossip } from '../../../src/peer/network/Gossip.ts';
+import { Gossip, GossipConfig } from '../../../src/peer/network/Gossip.ts';
 import { Transport } from '../../../src/peer/network/Transport.ts';
 import { neverAbort } from '../../../src/util/abortable.ts';
 import { Hash } from '../../../src/util/Hash.ts';
@@ -76,6 +76,10 @@ Deno.test('a block published on one node reaches a node connected to it', async 
 Deno.test('a block published before a peer connects is backfilled on connect', async () => {
   const network = new LoopbackNetwork();
   const a = makeNode(network, 'loopback://a');
+
+  // a is the one that has to backfill, and a node does not by default. Set before
+  // b exists, since b dials during its own construction.
+  a.ctx.configure(GossipConfig, { backfillOnConnect: true });
   a.ctx.get(Gossip);
 
   const block = publish(a);
