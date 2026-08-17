@@ -5,7 +5,8 @@ export interface Connection {
   // Log label only. The Connection object itself is the identity everywhere else.
   debugName: string;
 
-  pluginName: string;
+  // Instance of TransportPlugin, but should only be accessed for (1) the name, and (2) equality checks.
+  plugin: { name: string };
 
   isOpen: boolean;
 

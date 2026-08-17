@@ -49,9 +49,6 @@ export class WebsocketClientTransport implements TransportPlugin {
           },
         };
       },
-      stop: async () => {
-        // No global state to clean up
-      },
     };
   }
 }

@@ -93,7 +93,8 @@ export class LoopbackTransportPlugin implements TransportPlugin {
   emitsProtocol = 'loopback';
   acceptsProtocols = ['loopback'];
 
-  stoppedCount = 0;
+  stopAcceptingCount = 0;
+  shutdownCount = 0;
 
   private driver?: AnonymousTransportDriver;
 
@@ -115,9 +116,11 @@ export class LoopbackTransportPlugin implements TransportPlugin {
 
     return {
       dialAddress: (url: URL) => this.dial(url),
-      stop: () => {
-        this.stoppedCount += 1;
-        return Promise.resolve();
+      stopAccepting: () => {
+        this.stopAcceptingCount += 1;
+      },
+      shutdown: () => {
+        this.shutdownCount += 1;
       },
     };
   }

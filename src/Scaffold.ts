@@ -10,7 +10,7 @@ import { Fetch, FetchInput } from './peer/Fetch.ts';
 import { Transport } from './peer/network/Transport.ts';
 import { Put, PutInput } from './peer/Put.ts';
 import { Send, SendInput } from './peer/Send.ts';
-import { todo } from './util/functional.ts';
+import { once, todo } from './util/functional.ts';
 import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 
@@ -31,7 +31,9 @@ export class Scaffold {
     for (const role of config.roles ?? []) this.ctx.get(role);
   }
 
+  @once
   async close(): Promise<void> {
+    this.ctx.logger('scaffold')?.info('closing');
     await this.ctx.destruct();
   }
 

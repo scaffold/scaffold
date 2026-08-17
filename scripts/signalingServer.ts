@@ -42,3 +42,6 @@ scaffold.startTransport(
     console.log(`WebSocket announce: ${signal}`);
   },
 );
+
+Deno.addSignalListener('SIGTERM', () => scaffold.close());
+Deno.addSignalListener('SIGINT', () => scaffold.close());

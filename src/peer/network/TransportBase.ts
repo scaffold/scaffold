@@ -7,6 +7,7 @@ import {
   TransportService,
 } from '../../interfaces/transport.ts';
 import { ScopedLogger } from '../../logic/Logger.ts';
+import { assert } from '../../util/functional.ts';
 import { MaybePromise } from '../../util/MaybePromise.ts';
 import { MessageJoiner, MessageSplitter } from './MessageSplitter.ts';
 import { Connection } from './types.ts';
@@ -42,9 +43,16 @@ export abstract class TransportBase {
     if (idx === -1) {
       throw new Error(`Transport not found`);
     }
-
     const [{ service }] = this.transports.splice(idx, 1);
-    await service.stop?.();
+
+    // TODO: Better error handling?
+    await service.stopAccepting?.();
+    for (const conn of this.connections) {
+      if (conn.plugin === plugin) {
+        await this.closeConnection(conn, 'local');
+      }
+    }
+    await service.shutdown?.();
   }
 
   connect(url: URL): void {
@@ -73,32 +81,20 @@ export abstract class TransportBase {
   }
 
   close(conn: Connection) {
-    this.closeConnection(conn, 'local');
+    return this.closeConnection(conn, 'local');
   }
 
   async stop() {
-    // Await the shutdowns: they are what flush anything still queued on a socket,
-    // so a peer that publishes and exits immediately has its last block leave.
-    const flushed = await Promise.allSettled(
-      [...this.connections].map((conn) => this.closeConnection(conn, 'stop')),
+    const results = await Promise.allSettled(
+      this.transports.map(({ plugin }) => this.stopTransport(plugin)),
     );
-    for (const result of flushed) {
+    for (const result of results) {
       if (result.status === 'rejected') {
-        this.getLogger()?.warn('shutdownFailed', { error: String(result.reason) });
+        this.getLogger()?.warn('stopTransportFailed', { error: String(result.reason) });
       }
     }
 
-    const results = await Promise.allSettled(this.transports.map(({ service }) => service.stop()));
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i];
-      if (result.status === 'rejected') {
-        this.getLogger()?.warn('pluginStopFailed', {
-          protocol: this.transports[i].plugin.emitsProtocol,
-          error: String(result.reason),
-        });
-      }
-    }
-    this.transports = [];
+    assert(this.transports.length === 0);
   }
 
   private createAnonymousTransportDriver(
@@ -133,21 +129,21 @@ export abstract class TransportBase {
       },
 
       createAnonymousConnection: (provider: ConnectionProvider) =>
-        this.registerConnection(plugin.name, provider),
+        this.registerConnection(plugin, provider),
     };
   }
 
   // A plugin must have its provider ready to send before calling this: onConnectionReady
   // runs before the driver is handed back, and may send immediately.
   private registerConnection(
-    name: string,
+    plugin: TransportPlugin,
     provider: ConnectionProvider,
     remotePublicKey?: Uint8Array,
   ): ConnectionDriver {
     const log = this.getLogger();
     const conn: Connection = {
       debugName: `conn-${this.nextConnectionIndex++}`,
-      pluginName: name,
+      plugin,
       isOpen: true,
       provider,
       splitter: new MessageSplitter(provider.maxMsgSize ?? Infinity),

@@ -51,12 +51,8 @@ export class WebrtcTransport implements TransportPlugin {
 
   start(_anonymousDriver: AnonymousTransportDriver): TransportService {
     return {
-      initializeAuthenticatedTransport: (
-        driver: AuthenticatedTransportDriver,
-      ): TransportSession => this.openSession(driver),
-      stop: async () => {
-        // No global state to clean up
-      },
+      initializeAuthenticatedTransport: (driver: AuthenticatedTransportDriver): TransportSession =>
+        this.openSession(driver),
     };
   }
 

@@ -1,3 +1,5 @@
+import { assert } from '@std/assert';
+
 export { assert, assertEquals, unimplemented as todo } from '@std/assert';
 
 // deno-lint-ignore ban-types
@@ -9,6 +11,20 @@ export function error(msg: string): never {
 
 export const neverPromise = new Promise<never>(() => {});
 
+const undefKey = Symbol('undefKey');
+export function once<R>(fn: () => R): () => R;
+export function once<This extends WeakKey, R>(fn: (this: This) => R): (this: This) => R;
+export function once<Arg extends WeakKey, R>(fn: (arg: Arg) => R): (arg: Arg) => R;
+export function once(fn: (this: unknown, arg?: WeakKey) => unknown) {
+  const cache = new WeakMap<WeakKey, unknown>();
+  return function (this: WeakKey | undefined, arg?: WeakKey) {
+    assert(this === undefined || arg === undefined, 'once: keyed on a receiver and an argument');
+    const key = arg ?? this ?? undefKey;
+    if (!cache.has(key)) cache.set(key, fn.call(this, arg));
+    return cache.get(key);
+  };
+}
+
 export const match = <T, R>(
   val: T | undefined,
   ifTruthy: (val: T) => R,
@@ -19,21 +35,6 @@ export const match = <T, R>(
   } else {
     return ifUndef();
   }
-};
-
-// TODO: Move to decorators.ts
-export const memoize = <ArgType extends WeakKey, ReturnType extends {} | null>(
-  func: (arg: ArgType) => ReturnType,
-) => {
-  const cache = new WeakMap<ArgType, ReturnType>();
-  return (arg: ArgType): ReturnType => {
-    let res = cache.get(arg);
-    if (res === undefined) {
-      res = func(arg);
-      cache.set(arg, res);
-    }
-    return res;
-  };
 };
 
 export const mapEntries = <K extends string | number | symbol, V1, V2>(

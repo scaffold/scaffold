@@ -1,4 +1,4 @@
-import { assertEquals } from '@std/assert';
+import { assertEquals, assertGreater } from '@std/assert';
 import { makeDefaultConfig } from '../../src/Config.ts';
 import { Context } from '../../src/Context.ts';
 import { FsNodeType, ScaffoldCLI, ScaffoldCliDeps } from '../../src/cli/ScaffoldCLI.ts';
@@ -77,8 +77,8 @@ Deno.test('--verbosity installs a provider that writes to stderr', async () => {
     timestamp: 0,
     data: { a: 1 },
   });
-  assertEquals(h.err.length, 1);
-  assertEquals(h.err[0].includes('gossip ev'), true);
+  assertGreater(h.err.length, 1);
+  assertEquals(h.err.some((x) => x.includes('gossip ev')), true);
   assertEquals(h.out, []);
 });
 

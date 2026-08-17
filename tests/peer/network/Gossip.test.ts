@@ -14,7 +14,7 @@ const fakeBlock = (byte: number): Block =>
 function fakeConnection(debugName: string): Connection {
   return {
     debugName,
-    pluginName: 'fake',
+    plugin: { name: 'fake' },
     isOpen: true,
     provider: new MockConnectionProvider(),
     splitter: new MessageSplitter(Infinity),

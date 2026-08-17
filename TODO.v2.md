@@ -201,3 +201,8 @@ Both pre-existing at `deb379f`; neither caused by the rename, and neither blocks
 ## Surfaced by TLS-terminating relay deployment (2026-08-13)
 
 - [ ] `WebsocketServerTransport` mints its per-connection token into the query string (`/?token=...`), so behind a reverse proxy every live token lands in plaintext access logs during the connect window. Single-use (`pending.delete` on redemption) so the exposure is bounded, but a `Sec-WebSocket-Protocol` subprotocol or a header would keep it out of logs entirely. Deferred deliberately
+
+## Surfaced by `once` tests (2026-08-17)
+
+- [ ] `once` no longer traps reentrancy: the `mapPut`-backed version threw `mapPut called recursively!` when a once'd function called itself, and the unified version recurses until the stack overflows. A sentinel in the cache would restore the clearer failure if it is worth the branch
+- [ ] `deno task test:v2` fails on `--verbosity installs a provider that writes to stderr` (`tests/cli/ScaffoldCLI.test.ts:66`): the test asserts a single stderr line, and `Scaffold.close`'s new `info('closing')` log makes two. Either the shutdown log belongs at `debug`, or the test should assert on the event it handled rather than counting lines

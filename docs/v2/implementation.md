@@ -29,6 +29,8 @@ that is the one place the two halves must be told apart: `logic/Placement.ts` ex
 `graph/Placement.ts` exports `Placement extends PlacementBase`. A concept with no logic/ half is just the
 bare noun (`BlockStore`, `ClaimIndex`). tests/ mirrors the same directories.
 
+Potential other naming: `Plugin` / `Service`
+
 ## Core data model
 
 - **Packet** -- the immutable wire envelope: raw bytes, content hash, type tag, decoded message, optional signature and recovered signer. Frozen at ingestion. All protocol data travels as packets; a block is one packet type.

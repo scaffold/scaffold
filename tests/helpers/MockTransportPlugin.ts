@@ -45,7 +45,8 @@ export class MockTransportPlugin implements TransportPlugin {
 
   anonymousDriver?: AnonymousTransportDriver;
   startedCount = 0;
-  stoppedCount = 0;
+  stopAcceptingCount = 0;
+  shutdownCount = 0;
   readonly dialCalls: string[] = [];
   readonly authSessions: MockAuthSession[] = [];
 
@@ -99,9 +100,11 @@ export class MockTransportPlugin implements TransportPlugin {
         this.authSessions.push(entry);
         return session;
       },
-      stop: () => {
-        this.stoppedCount += 1;
-        return Promise.resolve();
+      stopAccepting: () => {
+        this.stopAcceptingCount += 1;
+      },
+      shutdown: () => {
+        this.shutdownCount += 1;
       },
     };
   }

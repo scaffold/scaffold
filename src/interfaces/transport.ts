@@ -66,7 +66,7 @@ export interface TransportSession {
   recvSignal(signal: string): void;
 
   /** Called by Scaffold after a connection is produced or on timeout. */
-  close(): void;
+  close(): MaybePromise<void>;
 }
 
 // -- Service (running state of a plugin) -------------------------------
@@ -78,7 +78,11 @@ export interface TransportService {
   /** Scaffold begins an authenticated handshake with a specific peer. */
   initializeAuthenticatedTransport?(driver: AuthenticatedTransportDriver): TransportSession;
 
-  stop(): Promise<void>;
+  // Called before transports are shutdown
+  stopAccepting?(): MaybePromise<void>;
+
+  // Called after transports are shutdown
+  shutdown?(): MaybePromise<void>;
 }
 
 // -- Plugin (user-provided entry point) --------------------------------

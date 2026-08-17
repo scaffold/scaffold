@@ -1,22 +1,22 @@
-import { assert, error } from './functional.ts';
+import { assert, error, NotUndefined } from './functional.ts';
 
 const trapRecursion = true;
 
-export interface MapSpec<K, V> {
+export interface MapSpec<K, V extends NotUndefined> {
   get(k: K): V | undefined;
   set(k: K, v: V): void;
   delete(k: K): boolean;
 }
 
 const recursionSentinel = Symbol('mapPut.RecursionSentinel');
-export const mapPut = <K, V>(
+export const mapPut = <K, V extends NotUndefined>(
   map: MapSpec<K, V>,
   key: K,
   creator: () => V,
   mutator?: (v: V) => V,
 ): V => {
   let val = map.get(key);
-  if (trapRecursion && val === recursionSentinel) {
+  if (trapRecursion && val === recursionSentinel as never) {
     map.delete(key);
     throw new Error(`mapPut called recursively!`);
   } else if (val === undefined) {
@@ -47,7 +47,7 @@ export const mapPut = <K, V>(
   return val;
 };
 
-export const mapPop = <K, V>(map: MapSpec<K, V>, key: K) => {
+export const mapPop = <K, V extends NotUndefined>(map: MapSpec<K, V>, key: K) => {
   const val = map.get(key);
   if (val !== undefined) {
     map.delete(key);

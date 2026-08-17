@@ -25,6 +25,9 @@ export interface WebsocketServerTransportConfig {
   hostname?: string;
   port?: number;
   publicOrigins?: string[];
+  /** Unhealthy probes to answer before `drain` resolves, and the cap on waiting for them. */
+  drainProbes?: number;
+  drainTimeoutMs?: number;
 }
 
 interface PendingAuthConn {
@@ -36,6 +39,10 @@ export class WebsocketServerTransport implements TransportPlugin {
   name = 'WebsocketServerTransport';
   emitsProtocol = 'websocket';
   acceptsProtocols: string[] = [];
+
+  private draining = false;
+  private drainingProbes = 0;
+  private onDrainProbe?: () => void;
 
   constructor(private config: WebsocketServerTransportConfig, private log?: Logger) {}
 
@@ -58,11 +65,22 @@ export class WebsocketServerTransport implements TransportPlugin {
       port,
       onListen: listenResolver.resolve,
       handler: (req) => {
+        const url = new URL(req.url);
+
+        if (url.pathname === '/healthz') {
+          if (!this.draining) return new Response('ok\n');
+          this.drainingProbes++;
+          this.onDrainProbe?.();
+          return new Response('draining\n', { status: 503 });
+        }
+
+        // Don't accept new connections once draining has begun
+        if (this.draining) return new Response('draining\n', { status: 503 });
+
         if (req.headers.get('upgrade') !== 'websocket') {
           return new Response(null, { status: 501 });
         }
 
-        const url = new URL(req.url);
         const token = url.searchParams.get('token');
 
         const { socket, response } = Deno.upgradeWebSocket(req);
@@ -119,11 +137,45 @@ export class WebsocketServerTransport implements TransportPlugin {
         };
         return session;
       },
-      stop: async () => {
+
+      /** Report unhealthy on /healthz and resolve once the proxy has observed it. A peer
+       * that reconnects after the connections close must land on our replacement, so the
+       * proxy has to stop routing here before Scaffold tears the sockets down. */
+      stopAccepting: async () => {
+        assert(!this.draining, 'Transport is already draining');
+        this.draining = true;
+
+        // TODO: Clean this up so it doesn't take 5 seconds to close if no one is hitting /healthz
+
+        const probes = this.config.drainProbes ?? 2;
+        const timeoutMs = this.config.drainTimeoutMs ?? 5000;
+        const { promise, resolve } = Promise.withResolvers<void>();
+
+        const timer = setTimeout(() => {
+          this.log?.warn('drainProbeTimeout', { probes: this.drainingProbes, timeoutMs });
+          resolve();
+        }, timeoutMs);
+
+        this.onDrainProbe = () => {
+          if (this.drainingProbes < probes) return;
+          clearTimeout(timer);
+          resolve();
+        };
+
+        await promise;
+        this.onDrainProbe = undefined;
+        this.log?.info('drained', { probes: this.drainingProbes });
+      },
+
+      // Called after all connections have been closed
+      shutdown: async () => {
+        assert(this.draining);
         pending.clear();
         try {
           await server.shutdown();
-        } catch { /* already stopped */ }
+        } catch (err) {
+          this.log?.debug('shutdownFailed', { error: String(err) });
+        }
       },
     };
   }
