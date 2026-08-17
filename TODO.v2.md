@@ -2,40 +2,30 @@
 
 ## Joel's TODOs
 
-Just launch the website
+Pending
 
-- [x] Write blog post
-- [x] Run the signaling server
-- [x] Point relay.scaffold.io at 5.78.93.43
-- [x] Point bootstrap url at signaling server
-- [x] Publish new npm package
-- [ ] Move website/ to scaffold.github.io/
-- [x] Make the CLI work
-- [x] Remove subscription box
-- [x] Implement status bar (# of peers, blocks, etc)
-- [x] Rewrite "There's only three methods" to reflect the new interfaces.
-- [x] Hide "A contract development environment" section and top menu "Explorer" link
-- [x] Update github link to https://github.com/scaffold/scaffold
-- [x] Update install command
-- [x] Get rid of `0xdda8ecfd22ea`
-- [x] Update bottom links (remove Explorer, discord, bluesky, RSS)
-- [x] Update 404 page
-- [x] Update getting started page
-- [x] Update concepts page
-- [x] Update FAQ page
-- [x] Update "writing contracts" page
-- [x] Update "how it works"
-- [x] Update community page (just github and github discussions)
-- [ ] More landing page content about applications and what it can be used for (see https://iii.dev/ for inspiration)
-- [ ] More efficient gossip
-- [ ] Implement subscription box and re-add it?
+- Finish domain transfers from Squarespace -> Cloudflare
+- Enable DNSSEC on Cloudflare
+- Close tabs
 
-MVP
+Wed, Aug 21
 
+- See if my descendant work formula works
+- Create insurance outputs for every block (maybe move aggregation fees there)
+- Build a link from every block to its insuring outputs (of which one should be current)
+- Only consider/forward insured blocks
+- Re-enable aggregation
 - WASM module linking, enabling the wasi shim
+- Full e2e contract execution (zig, python, go, js)
 - Scaffold.put a contract on the website (typescript; with CLI command in a comment)
-- Full e2e contract execution (zig, python, js)
-- Test gossip on a larger network
+- More landing page content about applications and what it can be used for (see https://iii.dev/ for inspiration)
+
+TODO
+
+- Close 20 tabs
+- Probing (so we can re-enable aggregation)
+- Implement subscription box and re-add it?
+- More efficient gossip
 - Fix incentives, enough for global state (consensus)
 - Random tree weight sampling (and verification)
 - Descendant weight propagation

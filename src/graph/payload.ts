@@ -23,7 +23,13 @@ export interface Output extends Predicate {
 export interface BlockPayload {
   anchor: Hash;
   chain: { weight: bigint; throughput: bigint }[];
-  aggregates: { block: Hash; outputCount: bigint }[];
+  aggregates: {
+    block: Hash;
+    outputCount: bigint;
+    // TODO: Not sure if the chain should be per-aggregate or per-block.
+    // Here, IO probes can immediately know which aggregate branch to take without loading each block.
+    // chain: { weight: bigint; throughput: bigint }[];
+  }[];
   claims: bigint[];
   refs: bigint[];
   outputs: Output[];
